@@ -15,7 +15,7 @@ class ApiService {
 
     try {
       const response = await fetch(url, config)
-      
+
       if (!response.ok) {
         throw new Error(`API request failed: ${response.status}`)
       }
@@ -59,21 +59,6 @@ class ApiService {
     })
   }
 
-  // Translation endpoints
-  async translateText(text, targetLanguage) {
-    return this.request('/translation/translate', {
-      method: 'POST',
-      body: JSON.stringify({
-        text,
-        target_language: targetLanguage,
-      }),
-    })
-  }
-
-  async getAvailableLanguages() {
-    return this.request('/translation/languages')
-  }
-
   // Pricing endpoints
   async getPriceSuggestion(productDetails) {
     return this.request('/pricing/suggest', {
@@ -84,6 +69,68 @@ class ApiService {
 
   async getMarketAnalysis(category, location) {
     return this.request(`/pricing/market-analysis?category=${category}&location=${location}`)
+  }
+
+  // Product Management endpoints
+  async createProduct(productData, authToken) {
+    return this.request('/products', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${authToken}`
+      },
+      body: JSON.stringify(productData),
+    })
+  }
+
+  async getProduct(productId, authToken = null) {
+    const headers = authToken ? { 'Authorization': `Bearer ${authToken}` } : {}
+    return this.request(`/products/${productId}`, {
+      headers
+    })
+  }
+
+  async updateProduct(productId, productData, authToken) {
+    return this.request(`/products/${productId}`, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${authToken}`
+      },
+      body: JSON.stringify(productData),
+    })
+  }
+
+  async deleteProduct(productId, authToken) {
+    return this.request(`/products/${productId}`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${authToken}`
+      },
+    })
+  }
+
+  async listProducts(filters = {}, authToken = null) {
+    const params = new URLSearchParams()
+
+    if (filters.ownerId) params.append('owner_id', filters.ownerId)
+    if (filters.status) params.append('status', filters.status)
+    if (filters.category) params.append('category', filters.category)
+    if (filters.page) params.append('page', filters.page)
+    if (filters.pageSize) params.append('page_size', filters.pageSize)
+
+    const headers = authToken ? { 'Authorization': `Bearer ${authToken}` } : {}
+    const queryString = params.toString()
+
+    return this.request(`/products${queryString ? '?' + queryString : ''}`, {
+      headers
+    })
+  }
+
+  async getUserProductStats(userId, authToken) {
+    return this.request(`/products/users/${userId}/stats`, {
+      headers: {
+        'Authorization': `Bearer ${authToken}`
+      }
+    })
   }
 
   // Recommendations endpoints

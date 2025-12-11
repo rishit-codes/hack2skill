@@ -1,18 +1,25 @@
 'use client'
 
 import { useState, useCallback } from 'react'
+import { useRouter } from 'next/router'
 import { motion } from 'framer-motion'
 import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui'
 import ThemeToggle from '@/components/ThemeToggle'
 import { useTheme } from '@/contexts/ThemeContext'
-import { Upload, Camera, Image as ImageIcon, CheckCircle, AlertCircle, ArrowLeft } from 'lucide-react'
+import { Upload, Camera, Image as ImageIcon, CheckCircle, AlertCircle, ArrowLeft, ArrowRight, Sparkles } from 'lucide-react'
 import Link from 'next/link'
+import apiService from '@/services/api'
 
 export default function PhotoUpload() {
-  const [dragActive, setDragActive] = useState(false)
-  const [uploadedFiles, setUploadedFiles] = useState([])
-  const [uploading, setUploading] = useState(false)
+  const router = useRouter()
   const { isDarkMode } = useTheme()
+
+  const [dragActive, setDragActive] = useState(false)
+  const [selectedFile, setSelectedFile] = useState(null)
+  const [analyzing, setAnalyzing] = useState(false)
+  const [analysis, setAnalysis] = useState(null)
+  const [error, setError] = useState(null)
+  const [creatingProduct, setCreatingProduct] = useState(false)
 
   const handleDrag = useCallback((e) => {
     e.preventDefault()
@@ -28,50 +35,149 @@ export default function PhotoUpload() {
     e.preventDefault()
     e.stopPropagation()
     setDragActive(false)
-    
+
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      handleFiles(e.dataTransfer.files)
+      handleFile(e.dataTransfer.files[0])
     }
   }, [])
 
-  const handleFiles = (files) => {
-    setUploading(true)
-    // Simulate upload process
-    setTimeout(() => {
-      const newFiles = Array.from(files).map(file => ({
-        id: Date.now() + Math.random(),
-        name: file.name,
-        size: file.size,
-        status: 'completed',
-        preview: URL.createObjectURL(file)
-      }))
-      setUploadedFiles(prev => [...prev, ...newFiles])
-      setUploading(false)
-    }, 2000)
+  const handleFile = async (file) => {
+    if (!file.type.startsWith('image/')) {
+      setError('Please upload an image file')
+      return
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      setError('File size must be less than 10MB')
+      return
+    }
+
+    setSelectedFile({
+      file,
+      preview: URL.createObjectURL(file),
+      name: file.name,
+      size: file.size
+    })
+    setError(null)
+    setAnalysis(null)
+
+    // Automatically analyze the image
+    await analyzeImage(file)
+  }
+
+  const analyzeImage = async (file) => {
+    setAnalyzing(true)
+    setError(null)
+
+    try {
+      // Call backend API to analyze image
+      const result = await apiService.analyzeImage(file)
+
+      setAnalysis(result)
+
+      // Check if image was rejected
+      if (result.status === 'rejected') {
+        setError('Image quality too low. Please upload a clearer photo.')
+      }
+    } catch (err) {
+      console.error('Image analysis failed:', err)
+      setError('Failed to analyze image. Please try again.')
+    } finally {
+      setAnalyzing(false)
+    }
   }
 
   const handleFileInput = (e) => {
-    if (e.target.files) {
-      handleFiles(e.target.files)
+    if (e.target.files && e.target.files[0]) {
+      handleFile(e.target.files[0])
+    }
+  }
+
+  const handleCreateProduct = async () => {
+    if (!analysis || analysis.status === 'rejected') {
+      return
+    }
+
+    setCreatingProduct(true)
+
+    try {
+      // TODO: Get auth token from context
+      const authToken = 'mock-user-123' // Replace with actual auth token
+
+      // Prepare product data from AI analysis
+      const productData = {
+        title: analysis.suggested_title || 'Untitled Product',
+        description: `Beautiful handcrafted item. ${analysis.suggested_materials?.join(', ') || ''}`,
+        category: mapCategory(analysis),
+        materials: analysis.suggested_materials || [],
+        colors: analysis.primary_colors || [],
+        tags: [...(analysis.seo_tags || [])].slice(0, 10),
+        images: [{
+          gcs_uri: analysis.gcs_uri,
+          enhanced_uri: analysis.enhanced_uri || null,
+          is_primary: true
+        }],
+        dimensions: analysis.estimated_dimensions_cm ? {
+          length_cm: parseFloat(analysis.estimated_dimensions_cm.split('x')[0]) || null
+        } : null,
+        status: 'draft'
+      }
+
+      // Create product
+      const product = await apiService.createProduct(productData, authToken)
+
+      // Navigate to product detail or edit page
+      router.push(`/products/${product.product_id}/edit`)
+
+    } catch (err) {
+      console.error('Failed to create product:', err)
+      setError('Failed to create product. Please try again.')
+    } finally {
+      setCreatingProduct(false)
+    }
+  }
+
+  const mapCategory = (analysis) => {
+    // Simple mapping logic - can be enhanced
+    const materials = (analysis.suggested_materials || []).join(' ').toLowerCase()
+
+    if (materials.includes('clay') || materials.includes('ceramic')) return 'pottery'
+    if (materials.includes('wood')) return 'woodwork'
+    if (materials.includes('fabric') || materials.includes('textile')) return 'textiles'
+    if (materials.includes('metal')) return 'metalwork'
+    if (materials.includes('glass')) return 'glasswork'
+    if (materials.includes('leather')) return 'leather'
+
+    return 'other'
+  }
+
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'auto_accepted':
+        return 'bg-green-500'
+      case 'needs_confirmation':
+        return 'bg-yellow-500'
+      case 'rejected':
+        return 'bg-red-500'
+      default:
+        return 'bg-gray-500'
     }
   }
 
   return (
-    <div className={`min-h-screen p-6 transition-all duration-300 ${
-      isDarkMode 
-        ? 'bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900' 
+    <div className={`min-h-screen p-6 transition-all duration-300 ${isDarkMode
+        ? 'bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900'
         : 'bg-gradient-to-br from-orange-50 via-amber-50 to-yellow-50'
-    }`}>
+      }`}>
       {/* Navigation */}
       <div className="max-w-4xl mx-auto mb-6">
         <div className="flex items-center justify-between">
           <Link href="/dashboard">
             <motion.button
-              className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors duration-300 ${
-                isDarkMode 
-                  ? 'text-orange-400 hover:bg-gray-800' 
+              className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors duration-300 ${isDarkMode
+                  ? 'text-orange-400 hover:bg-gray-800'
                   : 'text-orange-700 hover:bg-orange-100'
-              }`}
+                }`}
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
             >
@@ -79,9 +185,7 @@ export default function PhotoUpload() {
               <span>Back to Dashboard</span>
             </motion.button>
           </Link>
-          <div className="flex items-center space-x-4">
-            <ThemeToggle />
-          </div>
+          <ThemeToggle />
         </div>
       </div>
 
@@ -92,14 +196,12 @@ export default function PhotoUpload() {
           animate={{ opacity: 1, y: 0 }}
           className="mb-8 text-center"
         >
-          <h1 className={`text-4xl font-bold mb-4 transition-colors duration-300 ${
-            isDarkMode 
-              ? 'bg-gradient-to-r from-gray-100 to-gray-300 bg-clip-text text-transparent' 
+          <h1 className={`text-4xl font-bold mb-4 transition-colors duration-300 ${isDarkMode
+              ? 'bg-gradient-to-r from-gray-100 to-gray-300 bg-clip-text text-transparent'
               : 'bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent'
-          }`}>Upload & Enhance</h1>
-          <p className={`text-lg transition-colors duration-300 ${
-            isDarkMode ? 'text-gray-300' : 'text-gray-600'
-          }`}>Drop your craft photos here for AI enhancement</p>
+            }`}>Upload & Analyze</h1>
+          <p className={`text-lg transition-colors duration-300 ${isDarkMode ? 'text-gray-300' : 'text-gray-600'
+            }`}>Upload your craft photo for AI analysis and product creation</p>
         </motion.div>
 
         {/* Upload Area */}
@@ -108,22 +210,20 @@ export default function PhotoUpload() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
         >
-          <Card className={`mb-8 shadow-xl transition-all duration-300 ${
-            isDarkMode 
-              ? 'bg-gray-800/80 backdrop-blur-sm border-gray-700' 
+          <Card className={`mb-8 shadow-xl transition-all duration-300 ${isDarkMode
+              ? 'bg-gray-800/80 backdrop-blur-sm border-gray-700'
               : 'bg-white/80 backdrop-blur-sm border-orange-100'
-          }`}>
+            }`}>
             <CardContent className="p-8">
               <div
-                className={`border-2 border-dashed rounded-lg p-12 text-center transition-all duration-300 ${
-                  dragActive 
+                className={`border-2 border-dashed rounded-lg p-12 text-center transition-all duration-300 ${dragActive
                     ? isDarkMode
-                      ? 'border-orange-400 bg-orange-900/20' 
+                      ? 'border-orange-400 bg-orange-900/20'
                       : 'border-orange-500 bg-orange-50'
                     : isDarkMode
-                      ? 'border-gray-600 hover:border-gray-500' 
+                      ? 'border-gray-600 hover:border-gray-500'
                       : 'border-gray-300 hover:border-gray-400'
-                }`}
+                  }`}
                 onDragEnter={handleDrag}
                 onDragLeave={handleDrag}
                 onDragOver={handleDrag}
@@ -131,7 +231,7 @@ export default function PhotoUpload() {
               >
                 <div className="space-y-4">
                   <div className="flex justify-center">
-                    <motion.div 
+                    <motion.div
                       className="w-16 h-16 bg-gradient-to-br from-orange-400 to-amber-400 rounded-full flex items-center justify-center shadow-lg"
                       whileHover={{ scale: 1.1, rotate: 5 }}
                       transition={{ duration: 0.3 }}
@@ -140,19 +240,16 @@ export default function PhotoUpload() {
                     </motion.div>
                   </div>
                   <div>
-                    <h3 className={`text-lg font-medium mb-2 transition-colors duration-300 ${
-                      isDarkMode ? 'text-gray-100' : 'text-gray-900'
-                    }`}>
-                      Drop your craft photos here
+                    <h3 className={`text-lg font-medium mb-2 transition-colors duration-300 ${isDarkMode ? 'text-gray-100' : 'text-gray-900'
+                      }`}>
+                      Drop your craft photo here
                     </h3>
-                    <p className={`mb-4 transition-colors duration-300 ${
-                      isDarkMode ? 'text-gray-400' : 'text-gray-600'
-                    }`}>
+                    <p className={`mb-4 transition-colors duration-300 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'
+                      }`}>
                       Or click to browse your files
                     </p>
                     <input
                       type="file"
-                      multiple
                       accept="image/*"
                       onChange={handleFileInput}
                       className="hidden"
@@ -166,16 +263,15 @@ export default function PhotoUpload() {
                         <Button asChild>
                           <span className="cursor-pointer bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 text-white shadow-lg">
                             <Camera className="mr-2 h-4 w-4" />
-                            Choose Photos
+                            Choose Photo
                           </span>
                         </Button>
                       </motion.div>
                     </label>
                   </div>
-                  <p className={`text-sm transition-colors duration-300 ${
-                    isDarkMode ? 'text-gray-500' : 'text-gray-500'
-                  }`}>
-                    Supports JPG, PNG, WEBP up to 10MB each
+                  <p className={`text-sm transition-colors duration-300 ${isDarkMode ? 'text-gray-500' : 'text-gray-500'
+                    }`}>
+                    Supports JPG, PNG, WEBP up to 10MB
                   </p>
                 </div>
               </div>
@@ -183,100 +279,193 @@ export default function PhotoUpload() {
           </Card>
         </motion.div>
 
-        {/* Upload Progress */}
-        {uploading && (
+        {/* Error Message */}
+        {error && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-6"
+          >
+            <Card className="bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800">
+              <CardContent className="p-4 flex items-center space-x-3">
+                <AlertCircle className="h-5 w-5 text-red-600" />
+                <span className="text-red-700 dark:text-red-300">{error}</span>
+              </CardContent>
+            </Card>
+          </motion.div>
+        )}
+
+        {/* Analysis Progress */}
+        {analyzing && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
           >
-            <Card className={`mb-8 transition-all duration-300 ${
-              isDarkMode 
-                ? 'bg-gray-800/80 backdrop-blur-sm border-gray-700' 
+            <Card className={`mb-8 transition-all duration-300 ${isDarkMode
+                ? 'bg-gray-800/80 backdrop-blur-sm border-gray-700'
                 : 'bg-white/80 backdrop-blur-sm border-orange-100'
-            }`}>
+              }`}>
               <CardContent className="p-6">
                 <div className="flex items-center space-x-3">
                   <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-orange-600"></div>
-                  <span className={`transition-colors duration-300 ${
-                    isDarkMode ? 'text-gray-300' : 'text-gray-600'
-                  }`}>Processing your images...</span>
+                  <span className={`transition-colors duration-300 ${isDarkMode ? 'text-gray-300' : 'text-gray-600'
+                    }`}>Analyzing your image with AI...</span>
                 </div>
               </CardContent>
             </Card>
           </motion.div>
         )}
 
-        {/* Uploaded Files */}
-        {uploadedFiles.length > 0 && (
+        {/* Analysis Results */}
+        {analysis && !analyzing && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
+            className="space-y-6"
           >
-            <Card className={`shadow-xl transition-all duration-300 ${
-              isDarkMode 
-                ? 'bg-gray-800/80 backdrop-blur-sm border-gray-700' 
-                : 'bg-white/80 backdrop-blur-sm border-orange-100'
-            }`}>
+            {/* Image Preview */}
+            <Card className={`${isDarkMode
+                ? 'bg-gray-800/90 backdrop-blur-sm border-gray-700'
+                : 'bg-white/90 backdrop-blur-sm border-orange-100'
+              }`}>
               <CardHeader>
-                <CardTitle className={`flex items-center space-x-2 transition-colors duration-300 ${
-                  isDarkMode ? 'text-gray-100' : 'text-gray-900'
-                }`}>
-                  <ImageIcon className="h-5 w-5" />
-                  <span>Uploaded Photos</span>
+                <CardTitle className={`flex items-center justify-between ${isDarkMode ? 'text-gray-100' : 'text-gray-800'
+                  }`}>
+                  <span>Uploaded Image</span>
+                  <span className={`px-3 py-1 rounded-full text-xs ${getStatusColor(analysis.status)} text-white`}>
+                    {analysis.status.replace('_', ' ')}
+                  </span>
                 </CardTitle>
-                <CardDescription className={`transition-colors duration-300 ${
-                  isDarkMode ? 'text-gray-400' : 'text-gray-600'
-                }`}>
-                  {uploadedFiles.length} photo{uploadedFiles.length !== 1 ? 's' : ''} ready for enhancement
-                </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {uploadedFiles.map((file) => (
-                    <motion.div 
-                      key={file.id} 
-                      className="relative group"
-                      whileHover={{ scale: 1.02 }}
-                      transition={{ duration: 0.3 }}
-                    >
-                      <div className={`aspect-square rounded-lg overflow-hidden transition-colors duration-300 ${
-                        isDarkMode ? 'bg-gray-700' : 'bg-gray-100'
-                      }`}>
-                        <img
-                          src={file.preview}
-                          alt={file.name}
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
-                      <div className="absolute top-2 right-2">
-                        {file.status === 'completed' ? (
-                          <div className="bg-green-500 rounded-full p-1 shadow-lg">
-                            <CheckCircle className="h-4 w-4 text-white" />
-                          </div>
-                        ) : (
-                          <div className="bg-yellow-500 rounded-full p-1 shadow-lg">
-                            <AlertCircle className="h-4 w-4 text-white" />
-                          </div>
-                        )}
-                      </div>
-                      <div className="mt-2">
-                        <p className={`text-sm font-medium truncate transition-colors duration-300 ${
-                          isDarkMode ? 'text-gray-200' : 'text-gray-900'
-                        }`}>
-                          {file.name}
-                        </p>
-                        <p className={`text-xs transition-colors duration-300 ${
-                          isDarkMode ? 'text-gray-400' : 'text-gray-500'
-                        }`}>
-                          {(file.size / 1024 / 1024).toFixed(1)} MB
-                        </p>
-                      </div>
-                    </motion.div>
-                  ))}
-                </div>
+                {selectedFile && (
+                  <div className="relative aspect-video rounded-lg overflow-hidden">
+                    <img
+                      src={selectedFile.preview}
+                      alt="Uploaded craft"
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                )}
               </CardContent>
             </Card>
+
+            {/* AI Analysis Results */}
+            {analysis.status !== 'rejected' && (
+              <Card className={`${isDarkMode
+                  ? 'bg-gray-800/90 backdrop-blur-sm border-gray-700'
+                  : 'bg-white/90 backdrop-blur-sm border-orange-100'
+                }`}>
+                <CardHeader>
+                  <CardTitle className={`flex items-center space-x-2 ${isDarkMode ? 'text-gray-100' : 'text-gray-800'
+                    }`}>
+                    <Sparkles className="h-5 w-5 text-orange-500" />
+                    <span>AI Analysis Results</span>
+                  </CardTitle>
+                  <CardDescription className={
+                    isDarkMode ? 'text-gray-400' : 'text-gray-600'
+                  }>
+                    Confidence Score: {(analysis.confidence_score * 100).toFixed(0)}%
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {analysis.suggested_title && (
+                    <div>
+                      <label className={`text-sm font-medium ${isDarkMode ? 'text-gray-400' : 'text-gray-600'
+                        }`}>Suggested Title</label>
+                      <p className={`mt-1 ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>
+                        {analysis.suggested_title}
+                      </p>
+                    </div>
+                  )}
+
+                  {analysis.suggested_materials && analysis.suggested_materials.length > 0 && (
+                    <div>
+                      <label className={`text-sm font-medium ${isDarkMode ? 'text-gray-400' : 'text-gray-600'
+                        }`}>Materials Detected</label>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {analysis.suggested_materials.map((material, idx) => (
+                          <span
+                            key={idx}
+                            className={`px-3 py-1 rounded-full text-sm ${isDarkMode
+                                ? 'bg-gray-700 text-gray-300'
+                                : 'bg-gray-100 text-gray-700'
+                              }`}
+                          >
+                            {material}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {analysis.primary_colors && analysis.primary_colors.length > 0 && (
+                    <div>
+                      <label className={`text-sm font-medium ${isDarkMode ? 'text-gray-400' : 'text-gray-600'
+                        }`}>Primary Colors</label>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {analysis.primary_colors.map((color, idx) => (
+                          <span
+                            key={idx}
+                            className={`px-3 py-1 rounded-full text-sm ${isDarkMode
+                                ? 'bg-gray-700 text-gray-300'
+                                : 'bg-gray-100 text-gray-700'
+                              }`}
+                          >
+                            {color}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {analysis.seo_tags && analysis.seo_tags.length > 0 && (
+                    <div>
+                      <label className={`text-sm font-medium ${isDarkMode ? 'text-gray-400' : 'text-gray-600'
+                        }`}>SEO Tags</label>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {analysis.seo_tags.map((tag, idx) => (
+                          <span
+                            key={idx}
+                            className={`px-2 py-1 rounded text-xs ${isDarkMode
+                                ? 'bg-orange-900/30 text-orange-300'
+                                : 'bg-orange-100 text-orange-700'
+                              }`}
+                          >
+                            #{tag}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Create Product Button */}
+                  <div className="pt-4 border-t dark:border-gray-700">
+                    <Button
+                      onClick={handleCreateProduct}
+                      disabled={creatingProduct}
+                      className="w-full bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 text-white"
+                    >
+                      {creatingProduct ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                          Creating Product...
+                        </>
+                      ) : (
+                        <>
+                          Create Product
+                          <ArrowRight className="ml-2 h-4 w-4" />
+                        </>
+                      )}
+                    </Button>
+                    <p className={`mt-2 text-xs text-center ${isDarkMode ? 'text-gray-500' : 'text-gray-500'
+                      }`}>
+                      This will create a draft product that you can edit
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </motion.div>
         )}
       </div>
