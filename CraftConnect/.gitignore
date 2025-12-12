@@ -1,78 +1,139 @@
-# ========================
 # Python
-# ========================
-# Virtual environments
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+myvenv/
 venv/
-.env/
-.venv/
 ENV/
 env/
-myvenv/ # Added specific venv name
-env.bak/
+.venv
 
-# Python cache
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-
-# Packaging
-*.egg
-*.egg-info/
-dist/
+# Distribution / packaging
+.Python
 build/
+develop-eggs/
+dist/
+downloads/
+eggs/
 .eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
 
-# ========================
-# Node.js / Frontend
-# ========================
-node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.pnpm-debug.log*
-coverage/
-build/
-.cache/
-.next/
-out/
-dist/
+# PyInstaller
+*.manifest
+*.spec
 
-# ========================
-# CraftConnect Generated Data (NEW SECTION)
-# ========================
-# AI model index files from the recommender script
-index.faiss
-mapping.pkl
+# Unit test / coverage
+htmlcov/
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
 
-# ========================
-# Google Cloud / Secrets
-# ========================
-# Environment variables
-.env
-.env.*.local
+# Django / Flask
+instance/
+.webassets-cache
+db.sqlite3
 
-# Google Cloud service accounts
-service-account.json
-*.key.json
+# Jupyter Notebook
+.ipynb_checkpoints
+*.ipynb
 
-# Firebase credentials
-firebase-debug.log
-
-# ========================
-# IDE / OS
-# ========================
+# IDEs
 .vscode/
 .idea/
 *.swp
 *.swo
+*~
 .DS_Store
-Thumbs.db
 
-# ========================
-# Logs & Temp
-# ========================
+# Environment variables
+.env
+.env.local
+.env.production
+.env.*.local
+
+# Node.js / Frontend
+node_modules/
+.next/
+out/
+build/
+dist/
+.cache/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+lerna-debug.log*
+
+# Production
 *.log
 logs/
-tmp/
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# Temporary files
 *.tmp
+*.temp
+~*
+.tmp/
+
+# OS
+Thumbs.db
+Desktop.ini
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Google Cloud credentials
+*.json
+credentials/
+service-account*.json
+
+# Database files (keep empty db structure, ignore data)
+craftconnect.db
+*.db-journal
+
+# Uploads (user data)
+uploads/
+!uploads/.gitkeep
+
+# AI Model cache
+transformers_cache/
+torch_cache/
+.cache/huggingface/
+
+# Local testing files
+TESTING_CONNECTION.md
+test_*.py
+*_test.py
+
+# Scripts output
+scripts/__pycache__/
+scripts/*.pyc
+
+# Backup files
+*.bak
+*.backup
+*.old
+
+# Lock files (optional - comment out if you want to track them)
+# package-lock.json
+# yarn.lock
+# poetry.lock
