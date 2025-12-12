@@ -1,19 +1,29 @@
 from pydantic import BaseModel, Field
+from typing import Optional
 
 class StoryRequest(BaseModel):
     """
-    Defines the two-prompt input from the artisan.
+    Flexible story request that accepts either product data or artisan prompts.
     """
-    artisan_heritage: str = Field(
-        ...,
+    # Old format (for Vertex AI)
+    artisan_heritage: Optional[str] = Field(
+        None,
         description="Artisan's introduction and craft heritage.",
         examples=["I am a third-generation potter from Kutch, Gujarat."]
     )
-    piece_story: str = Field(
-        ...,
+    piece_story: Optional[str] = Field(
+        None,
         description="The story or inspiration behind this specific art piece.",
         examples=["This vase is inspired by the monsoon clouds rolling over the Rann."]
     )
+    
+    # New format (for simple story generation)
+    title: Optional[str] = None
+    description: Optional[str] = None
+    category: Optional[str] = None
+    materials: Optional[list] = None
+    colors: Optional[list] = None
+    tags: Optional[list] = None
 
 class StoryResponse(BaseModel):
     """
@@ -23,3 +33,4 @@ class StoryResponse(BaseModel):
         ...,
         description="The final, polished narrative for the product listing."
     )
+# Reload trigger

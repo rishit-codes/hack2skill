@@ -18,7 +18,8 @@ import {
   Users,
   Star,
   TrendingUp,
-  User
+  User,
+  Package
 } from 'lucide-react'
 import Link from 'next/link'
 
@@ -63,6 +64,7 @@ export default function Dashboard() {
 
   const sidebarItems = [
     { name: 'Dashboard', href: '/dashboard', icon: BarChart3, active: true },
+    { name: 'Products Gallery', href: '/products', icon: Package },
     { name: 'Upload Co-Pilot', href: '/upload', icon: Upload },
     { name: 'Storyteller', href: '/story', icon: FileText },
     { name: 'Price Helper', href: '/price', icon: DollarSign },
@@ -82,25 +84,29 @@ export default function Dashboard() {
       title: 'Upload & Enhance',
       description: 'Drop your craft photos here for AI enhancement',
       icon: Upload,
-      color: 'bg-blue-500'
+      color: 'bg-blue-500',
+      href: '/upload'
     },
     {
       title: 'Tell Your Story',
       description: 'Generate compelling narratives for your creations',
       icon: FileText,
-      color: 'bg-green-500'
+      color: 'bg-green-500',
+      href: '/story'
     },
     {
       title: 'Price with Confidence',
       description: 'AI-powered fair pricing for your artwork',
       icon: DollarSign,
-      color: 'bg-yellow-500'
+      color: 'bg-yellow-500',
+      href: '/price'
     },
     {
       title: 'Get Recommendations',
       description: 'Personalized insights for your business',
       icon: Star,
-      color: 'bg-pink-500'
+      color: 'bg-pink-500',
+      href: '/recommend'
     }
   ]
 
@@ -112,8 +118,8 @@ export default function Dashboard() {
 
   return (
     <div className={`min-h-screen transition-all duration-300 ${isDarkMode
-        ? 'bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900'
-        : 'bg-gradient-to-br from-orange-50 via-amber-50 to-yellow-50'
+      ? 'bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900'
+      : 'bg-gradient-to-br from-orange-50 via-amber-50 to-yellow-50'
       }`}>
       {/* Sidebar */}
       <motion.div
@@ -121,8 +127,8 @@ export default function Dashboard() {
         animate={{ x: sidebarOpen ? 0 : (typeof window !== 'undefined' && window.innerWidth >= 1024) ? 0 : -280 }}
         transition={{ duration: 0.4, ease: [0.25, 0.1, 0.25, 1] }}
         className={`fixed inset-y-0 left-0 z-50 w-64 shadow-xl border-r transition-all duration-300 ${isDarkMode
-            ? 'bg-gray-800/95 backdrop-blur-sm border-gray-700'
-            : 'bg-white/95 backdrop-blur-sm border-orange-100'
+          ? 'bg-gray-800/95 backdrop-blur-sm border-gray-700'
+          : 'bg-white/95 backdrop-blur-sm border-orange-100'
           }`}
       >
         <div className={`flex items-center justify-between h-16 px-6 border-b transition-colors duration-300 ${isDarkMode ? 'border-gray-700' : 'border-orange-100'
@@ -143,8 +149,8 @@ export default function Dashboard() {
           <button
             onClick={() => setSidebarOpen(false)}
             className={`lg:hidden p-1 rounded-md transition-colors duration-300 ${isDarkMode
-                ? 'hover:bg-gray-700 text-orange-400'
-                : 'hover:bg-orange-100 text-orange-600'
+              ? 'hover:bg-gray-700 text-orange-400'
+              : 'hover:bg-orange-100 text-orange-600'
               }`}
           >
             <X className="h-5 w-5" />
@@ -171,11 +177,12 @@ export default function Dashboard() {
               >
                 <Link
                   href={item.href}
+                  prefetch={true}
                   className={`flex items-center space-x-3 px-4 py-3 rounded-lg transition-all duration-300 group ${item.active
-                      ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-lg'
-                      : isDarkMode
-                        ? 'text-gray-300 hover:bg-gray-700 hover:text-orange-300'
-                        : 'text-gray-600 hover:bg-orange-50 hover:text-orange-700'
+                    ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-lg'
+                    : isDarkMode
+                      ? 'text-gray-300 hover:bg-gray-700 hover:text-orange-300'
+                      : 'text-gray-600 hover:bg-orange-50 hover:text-orange-700'
                     }`}
                 >
                   <item.icon className={`h-5 w-5 transition-transform group-hover:scale-110 ${item.active ? 'text-white' : 'text-orange-500'
@@ -196,8 +203,8 @@ export default function Dashboard() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
           className={`shadow-sm border-b sticky top-0 z-30 transition-all duration-300 ${isDarkMode
-              ? 'bg-gray-800/80 backdrop-blur-sm border-gray-700'
-              : 'bg-white/80 backdrop-blur-sm border-orange-100'
+            ? 'bg-gray-800/80 backdrop-blur-sm border-gray-700'
+            : 'bg-white/80 backdrop-blur-sm border-orange-100'
             }`}
         >
           <div className="flex items-center justify-between h-16 px-6">
@@ -206,8 +213,8 @@ export default function Dashboard() {
                 whileTap={{ scale: 0.95 }}
                 onClick={() => setSidebarOpen(true)}
                 className={`lg:hidden p-2 rounded-lg transition-colors duration-300 ${isDarkMode
-                    ? 'hover:bg-gray-700 text-orange-400'
-                    : 'hover:bg-orange-100 text-orange-600'
+                  ? 'hover:bg-gray-700 text-orange-400'
+                  : 'hover:bg-orange-100 text-orange-600'
                   }`}
               >
                 <Menu className="h-5 w-5" />
@@ -229,8 +236,8 @@ export default function Dashboard() {
                   variant="outline"
                   size="sm"
                   className={`transition-colors duration-300 ${isDarkMode
-                      ? 'border-gray-600 text-orange-400 hover:bg-gray-700'
-                      : 'border-orange-200 text-orange-700 hover:bg-orange-50'
+                    ? 'border-gray-600 text-orange-400 hover:bg-gray-700'
+                    : 'border-orange-200 text-orange-700 hover:bg-orange-50'
                     }`}
                 >
                   Menu
@@ -252,8 +259,8 @@ export default function Dashboard() {
             <motion.div variants={fadeInUp} className="text-center lg:text-left">
               <motion.h2
                 className={`text-4xl lg:text-5xl font-bold mb-4 transition-all duration-300 ${isDarkMode
-                    ? 'bg-gradient-to-r from-gray-100 to-gray-300 bg-clip-text text-transparent'
-                    : 'bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent'
+                  ? 'bg-gradient-to-r from-gray-100 to-gray-300 bg-clip-text text-transparent'
+                  : 'bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent'
                   }`}
                 whileHover={{ scale: 1.02 }}
                 transition={{ duration: 0.3 }}
@@ -286,8 +293,8 @@ export default function Dashboard() {
                   className="group"
                 >
                   <Card className={`shadow-lg hover:shadow-xl transition-all duration-300 ${isDarkMode
-                      ? 'bg-gray-800/80 backdrop-blur-sm border-gray-700'
-                      : 'bg-white/80 backdrop-blur-sm border-orange-100'
+                    ? 'bg-gray-800/80 backdrop-blur-sm border-gray-700'
+                    : 'bg-white/80 backdrop-blur-sm border-orange-100'
                     }`}>
                     <CardContent className="p-6">
                       <motion.div
@@ -333,8 +340,8 @@ export default function Dashboard() {
                     }`}>Your Craft Studio</h3>
                   <motion.div
                     className={`flex items-center space-x-2 px-4 py-2 rounded-full shadow-sm transition-all duration-300 ${isDarkMode
-                        ? 'bg-gradient-to-r from-gray-700 to-gray-600'
-                        : 'bg-gradient-to-r from-orange-100 to-amber-100'
+                      ? 'bg-gradient-to-r from-gray-700 to-gray-600'
+                      : 'bg-gradient-to-r from-orange-100 to-amber-100'
                       }`}
                     whileHover={{ scale: 1.05 }}
                     transition={{ duration: 0.3 }}
@@ -354,67 +361,68 @@ export default function Dashboard() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 {tools.map((tool, index) => (
-                  <motion.div
-                    key={index}
-                    variants={scaleIn}
-                    whileHover="hover"
-                    initial="rest"
-                    animate="rest"
-                    className="group cursor-pointer"
-                  >
-                    <Card className={`hover:shadow-2xl transition-all duration-500 overflow-hidden ${isDarkMode
+                  <Link key={index} href={tool.href}>
+                    <motion.div
+                      variants={scaleIn}
+                      whileHover="hover"
+                      initial="rest"
+                      animate="rest"
+                      className="group cursor-pointer"
+                    >
+                      <Card className={`hover:shadow-2xl transition-all duration-500 overflow-hidden ${isDarkMode
                         ? 'bg-gray-800/90 backdrop-blur-sm border-gray-700'
                         : 'bg-white/90 backdrop-blur-sm border-orange-100'
-                      }`}>
-                      <CardHeader className="pb-4 relative">
-                        <motion.div
-                          className={`w-14 h-14 ${tool.color} rounded-xl flex items-center justify-center mb-4 shadow-lg`}
-                          whileHover={{ scale: 1.1, rotate: 5 }}
-                          transition={{ duration: 0.3 }}
-                        >
-                          <tool.icon className="h-7 w-7 text-white" />
-                        </motion.div>
-                        <CardTitle className={`text-xl font-bold transition-colors duration-300 group-hover:text-orange-500 ${isDarkMode ? 'text-gray-100' : 'text-gray-800'
-                          }`}>
-                          {tool.title}
-                        </CardTitle>
-                        <CardDescription className={`text-sm leading-relaxed transition-colors duration-300 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'
-                          }`}>
-                          {tool.description}
-                        </CardDescription>
-                        <motion.div
-                          className="absolute top-4 right-4 w-2 h-2 bg-orange-400 rounded-full opacity-0 group-hover:opacity-100"
-                          initial={{ scale: 0 }}
-                          whileHover={{ scale: 1 }}
-                          transition={{ duration: 0.3 }}
-                        />
-                      </CardHeader>
-                      <CardContent className="pt-0">
-                        <motion.div
-                          whileHover={{ scale: 1.02 }}
-                          whileTap={{ scale: 0.98 }}
-                        >
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className={`w-full transition-all duration-300 ${isDarkMode
+                        }`}>
+                        <CardHeader className="pb-4 relative">
+                          <motion.div
+                            className={`w-14 h-14 ${tool.color} rounded-xl flex items-center justify-center mb-4 shadow-lg`}
+                            whileHover={{ scale: 1.1, rotate: 5 }}
+                            transition={{ duration: 0.3 }}
+                          >
+                            <tool.icon className="h-7 w-7 text-white" />
+                          </motion.div>
+                          <CardTitle className={`text-xl font-bold transition-colors duration-300 group-hover:text-orange-500 ${isDarkMode ? 'text-gray-100' : 'text-gray-800'
+                            }`}>
+                            {tool.title}
+                          </CardTitle>
+                          <CardDescription className={`text-sm leading-relaxed transition-colors duration-300 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'
+                            }`}>
+                            {tool.description}
+                          </CardDescription>
+                          <motion.div
+                            className="absolute top-4 right-4 w-2 h-2 bg-orange-400 rounded-full opacity-0 group-hover:opacity-100"
+                            initial={{ scale: 0 }}
+                            whileHover={{ scale: 1 }}
+                            transition={{ duration: 0.3 }}
+                          />
+                        </CardHeader>
+                        <CardContent className="pt-0">
+                          <motion.div
+                            whileHover={{ scale: 1.02 }}
+                            whileTap={{ scale: 0.98 }}
+                          >
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className={`w-full transition-all duration-300 ${isDarkMode
                                 ? 'border-gray-600 text-orange-400 hover:bg-gray-700 hover:border-orange-400'
                                 : 'border-orange-200 text-orange-700 hover:bg-orange-50 hover:border-orange-300'
-                              }`}
-                          >
-                            Get Started
-                            <motion.div
-                              className="ml-2"
-                              animate={{ x: [0, 3, 0] }}
-                              transition={{ duration: 1.5, repeat: Infinity }}
+                                }`}
                             >
-                              →
-                            </motion.div>
-                          </Button>
-                        </motion.div>
-                      </CardContent>
-                    </Card>
-                  </motion.div>
+                              Get Started
+                              <motion.div
+                                className="ml-2"
+                                animate={{ x: [0, 3, 0] }}
+                                transition={{ duration: 1.5, repeat: Infinity }}
+                              >
+                                →
+                              </motion.div>
+                            </Button>
+                          </motion.div>
+                        </CardContent>
+                      </Card>
+                    </motion.div>
+                  </Link>
                 ))}
               </div>
             </motion.div>
@@ -429,8 +437,8 @@ export default function Dashboard() {
                 animate="rest"
               >
                 <Card className={`shadow-lg hover:shadow-xl transition-all duration-500 ${isDarkMode
-                    ? 'bg-gray-800/90 backdrop-blur-sm border-gray-700'
-                    : 'bg-white/90 backdrop-blur-sm border-orange-100'
+                  ? 'bg-gray-800/90 backdrop-blur-sm border-gray-700'
+                  : 'bg-white/90 backdrop-blur-sm border-orange-100'
                   }`}>
                   <CardHeader className="pb-6">
                     <div className="flex items-center space-x-3">
@@ -472,8 +480,8 @@ export default function Dashboard() {
                           }`}>
                           <motion.div
                             className={`h-3 rounded-full bg-gradient-to-r ${item.color === 'orange' ? 'from-orange-400 to-orange-600' :
-                                item.color === 'green' ? 'from-green-400 to-green-600' :
-                                  'from-blue-400 to-blue-600'
+                              item.color === 'green' ? 'from-green-400 to-green-600' :
+                                'from-blue-400 to-blue-600'
                               }`}
                             initial={{ width: 0 }}
                             animate={{ width: `${item.progress}%` }}
@@ -494,8 +502,8 @@ export default function Dashboard() {
                 animate="rest"
               >
                 <Card className={`shadow-lg hover:shadow-xl transition-all duration-500 ${isDarkMode
-                    ? 'bg-gray-800/90 backdrop-blur-sm border-gray-700'
-                    : 'bg-white/90 backdrop-blur-sm border-orange-100'
+                  ? 'bg-gray-800/90 backdrop-blur-sm border-gray-700'
+                  : 'bg-white/90 backdrop-blur-sm border-orange-100'
                   }`}>
                   <CardHeader className="pb-6">
                     <div className="flex items-center space-x-3">
@@ -523,8 +531,8 @@ export default function Dashboard() {
                         transition={{ delay: 0.2 + index * 0.1 }}
                         whileHover={{ scale: 1.02, x: 5 }}
                         className={`flex items-center space-x-4 p-3 rounded-lg transition-all duration-300 cursor-pointer ${isDarkMode
-                            ? 'hover:bg-gray-700/50'
-                            : 'hover:bg-orange-50'
+                          ? 'hover:bg-gray-700/50'
+                          : 'hover:bg-orange-50'
                           }`}
                       >
                         <motion.div

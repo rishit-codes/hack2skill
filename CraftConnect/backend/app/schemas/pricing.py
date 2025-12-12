@@ -1,4 +1,5 @@
 from pydantic import BaseModel, Field
+from typing import Optional
 
 class PriceSuggestionRequest(BaseModel):
     materials_cost: float = Field(..., gt=0, description="Cost of raw materials in INR.")
@@ -6,8 +7,9 @@ class PriceSuggestionRequest(BaseModel):
     category: str = Field(..., description="Product category for finding comparables.", examples=["pottery", "textiles"])
 
 class PriceSuggestionResponse(BaseModel):
-    min_price: float
-    max_price: float
     suggested_price: float
-    explanation: str = Field(..., description="AI-generated explanation for the price range.")
-    confidence: str = Field(..., description="The confidence level of the suggestion (Low, Medium, High).")
+    min_price: Optional[float] = None
+    max_price: Optional[float] = None
+    explanation: Optional[str] = Field(None, description="AI-generated explanation for the price range.")
+    confidence: Optional[str] = Field(None, description="The confidence level of the suggestion (Low, Medium, High).")
+    price_breakdown: Optional[dict] = None

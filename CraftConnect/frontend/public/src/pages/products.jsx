@@ -1,13 +1,15 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/router'
 import { motion } from 'framer-motion'
+import { useAuth } from '@/contexts/AuthContext'
 import { Button, Card, CardContent, CardHeader, CardTitle } from '@/components/ui'
 import { useTheme } from '@/contexts/ThemeContext'
 import ThemeToggle from '@/components/ThemeToggle'
 import Link from 'next/link'
 import Image from 'next/image'
-import apiService from '@/services/api'
+import api from '@/services/api'
 import {
     Grid,
     List,
@@ -22,7 +24,9 @@ import {
 } from 'lucide-react'
 
 export default function ProductsGallery() {
+    const router = useRouter()
     const { isDarkMode } = useTheme()
+    const { user, isAuthenticated } = useAuth()
 
     const [products, setProducts] = useState([])
     const [loading, setLoading] = useState(true)
@@ -55,9 +59,6 @@ export default function ProductsGallery() {
         setLoading(true)
 
         try {
-            // TODO: Get auth token from context
-            const authToken = null
-
             const filterParams = {
                 status: filters.status || undefined,
                 category: filters.category || undefined,
@@ -65,7 +66,13 @@ export default function ProductsGallery() {
                 pageSize: filters.pageSize
             }
 
-            const data = await apiService.listProducts(filterParams, authToken)
+            // Only show user's own products if they filter by status
+            // Otherwise show public products
+            if (isAuthenticated && filters.status) {
+                filterParams.ownerId = user?.user_id
+            }
+
+            const data = await api.listProducts(filterParams)
 
             setProducts(data.products || [])
             setPagination({
@@ -79,10 +86,32 @@ export default function ProductsGallery() {
         }
     }
 
-    const handleSearch = (e) => {
+    const handleSearch = async (e) => {
         e.preventDefault()
-        // TODO: Implement search on backend
-        loadProducts()
+
+        if (!filters.search.trim()) {
+            loadProducts()
+            return
+        }
+
+        setLoading(true)
+        try {
+            const data = await api.searchProducts(filters.search, {
+                category: filters.category || undefined,
+                page: filters.page,
+                pageSize: filters.pageSize
+            })
+
+            setProducts(data.products || [])
+            setPagination({
+                total: data.total || 0,
+                hasMore: data.has_more || false
+            })
+        } catch (err) {
+            console.error('Failed to search products:', err)
+        } finally {
+            setLoading(false)
+        }
     }
 
     const handleFilterChange = (key, value) => {
@@ -107,17 +136,20 @@ export default function ProductsGallery() {
         >
             <Link href={`/product_detail?productId=${product.product_id}`}>
                 <Card className={`cursor-pointer overflow-hidden transition-all duration-300 hover:shadow-xl ${isDarkMode
-                        ? 'bg-gray-800/90 backdrop-blur-sm border-gray-700 hover:border-orange-500'
-                        : 'bg-white/90 backdrop-blur-sm border-orange-100 hover:border-orange-300'
+                    ? 'bg-gray-800/90 backdrop-blur-sm border-gray-700 hover:border-orange-500'
+                    : 'bg-white/90 backdrop-blur-sm border-orange-100 hover:border-orange-300'
                     }`}>
                     {/* Product Image */}
                     <div className="relative aspect-square overflow-hidden">
                         {product.images && product.images.length > 0 ? (
-                            <Image
-                                src={product.images[0].enhanced_uri || product.images[0].gcs_uri}
+                            <img
+                                src={
+                                    product.images[0].gcs_uri.startsWith('/uploads')
+                                        ? `http://localhost:8000${product.images[0].gcs_uri}`
+                                        : (product.images[0].enhanced_uri || product.images[0].gcs_uri)
+                                }
                                 alt={product.title}
-                                fill
-                                className="object-cover transition-transform duration-300 hover:scale-110"
+                                className="w-full h-full object-cover transition-transform duration-300 hover:scale-110"
                             />
                         ) : (
                             <div className={`w-full h-full flex items-center justify-center ${isDarkMode ? 'bg-gray-700' : 'bg-gray-200'
@@ -129,10 +161,10 @@ export default function ProductsGallery() {
                         {/* Status Badge */}
                         <div className="absolute top-2 right-2">
                             <span className={`px-2 py-1 rounded-full text-xs font-medium backdrop-blur-sm ${product.status === 'public'
-                                    ? 'bg-green-500/80 text-white'
-                                    : product.status === 'draft'
-                                        ? 'bg-yellow-500/80 text-white'
-                                        : 'bg-gray-500/80 text-white'
+                                ? 'bg-green-500/80 text-white'
+                                : product.status === 'draft'
+                                    ? 'bg-yellow-500/80 text-white'
+                                    : 'bg-gray-500/80 text-white'
                                 }`}>
                                 {product.status}
                             </span>
@@ -184,8 +216,8 @@ export default function ProductsGallery() {
 
     return (
         <div className={`min-h-screen p-6 transition-all duration-300 ${isDarkMode
-                ? 'bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900'
-                : 'bg-gradient-to-br from-orange-50 via-amber-50 to-yellow-50'
+            ? 'bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900'
+            : 'bg-gradient-to-br from-orange-50 via-amber-50 to-yellow-50'
             }`}>
             <div className="max-w-7xl mx-auto">
                 {/* Header */}
@@ -193,8 +225,8 @@ export default function ProductsGallery() {
                     <div className="flex items-center justify-between mb-6">
                         <div>
                             <h1 className={`text-4xl font-bold mb-2 ${isDarkMode
-                                    ? 'bg-gradient-to-r from-gray-100 to-gray-300 bg-clip-text text-transparent'
-                                    : 'bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent'
+                                ? 'bg-gradient-to-r from-gray-100 to-gray-300 bg-clip-text text-transparent'
+                                : 'bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent'
                                 }`}>
                                 Products Gallery
                             </h1>
@@ -222,8 +254,8 @@ export default function ProductsGallery() {
 
                     {/* Filters */}
                     <Card className={`${isDarkMode
-                            ? 'bg-gray-800/90 backdrop-blur-sm border-gray-700'
-                            : 'bg-white/90 backdrop-blur-sm border-orange-100'
+                        ? 'bg-gray-800/90 backdrop-blur-sm border-gray-700'
+                        : 'bg-white/90 backdrop-blur-sm border-orange-100'
                         }`}>
                         <CardContent className="p-4">
                             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -236,8 +268,8 @@ export default function ProductsGallery() {
                                             type="text"
                                             placeholder="Search products..."
                                             className={`w-full pl-10 pr-4 py-2 rounded-lg border transition-colors ${isDarkMode
-                                                    ? 'bg-gray-700 border-gray-600 text-gray-100 placeholder-gray-400'
-                                                    : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
+                                                ? 'bg-gray-700 border-gray-600 text-gray-100 placeholder-gray-400'
+                                                : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
                                                 }`}
                                             value={filters.search}
                                             onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
@@ -248,8 +280,8 @@ export default function ProductsGallery() {
                                 {/* Category Filter */}
                                 <select
                                     className={`px-4 py-2 rounded-lg border transition-colors ${isDarkMode
-                                            ? 'bg-gray-700 border-gray-600 text-gray-100'
-                                            : 'bg-white border-gray-300 text-gray-900'
+                                        ? 'bg-gray-700 border-gray-600 text-gray-100'
+                                        : 'bg-white border-gray-300 text-gray-900'
                                         }`}
                                     value={filters.category}
                                     onChange={(e) => handleFilterChange('category', e.target.value)}
@@ -265,8 +297,8 @@ export default function ProductsGallery() {
                                 {/* Status Filter */}
                                 <select
                                     className={`px-4 py-2 rounded-lg border transition-colors ${isDarkMode
-                                            ? 'bg-gray-700 border-gray-600 text-gray-100'
-                                            : 'bg-white border-gray-300 text-gray-900'
+                                        ? 'bg-gray-700 border-gray-600 text-gray-100'
+                                        : 'bg-white border-gray-300 text-gray-900'
                                         }`}
                                     value={filters.status}
                                     onChange={(e) => handleFilterChange('status', e.target.value)}
@@ -322,8 +354,8 @@ export default function ProductsGallery() {
                     </div>
                 ) : products.length === 0 ? (
                     <Card className={`text-center py-16 ${isDarkMode
-                            ? 'bg-gray-800/90 backdrop-blur-sm border-gray-700'
-                            : 'bg-white/90 backdrop-blur-sm border-orange-100'
+                        ? 'bg-gray-800/90 backdrop-blur-sm border-gray-700'
+                        : 'bg-white/90 backdrop-blur-sm border-orange-100'
                         }`}>
                         <CardContent>
                             <Package className={`h-16 w-16 mx-auto mb-4 ${isDarkMode ? 'text-gray-600' : 'text-gray-400'
@@ -342,8 +374,8 @@ export default function ProductsGallery() {
                     </Card>
                 ) : (
                     <div className={`grid gap-6 ${viewMode === 'grid'
-                            ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3'
-                            : 'grid-cols-1'
+                        ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3'
+                        : 'grid-cols-1'
                         }`}>
                         {products.map((product) => (
                             <ProductCard key={product.product_id} product={product} />

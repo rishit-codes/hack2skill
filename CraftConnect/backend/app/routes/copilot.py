@@ -4,8 +4,8 @@ from pydantic import BaseModel, Field
 from typing import List, Dict, Optional
 
 from app.cloud_services import storage, firestore_db
-from app.models import vertex_gemini # <-- Use the new Gemini model
-from app.utils import image_utils # For the enhancer fallback
+from app.models import local_vision  # Using LOCAL BLIP model - no external API!
+from app.config.settings import settings
 
 #from app.models import vertex_imagen     #vertex_imagen.py       ------- image enhancement ****
 '''    import asyncio
@@ -33,12 +33,9 @@ class ImageAnalysisResponse(BaseModel):
 
 @router.post("/analyze", response_model=ImageAnalysisResponse)
 async def analyze_image(image_file: UploadFile = File(...)):
-    """Orchestrates the new, enhanced image analysis flow."""
+    """Analyze image using LOCAL BLIP model (runs on your machine!)."""
     contents = await image_file.read()
     image_hash = hashlib.sha256(contents).hexdigest()
-
-    # NOTE: Caching logic can be enhanced to store the richer Gemini response.
-    # For now, we'll proceed with a live call to demonstrate the new logic.
 
     file_extension = image_file.filename.split('.')[-1]
     blob_name = f"products/{image_hash}.{file_extension}"
@@ -46,16 +43,15 @@ async def analyze_image(image_file: UploadFile = File(...)):
     if not gcs_uri:
         raise HTTPException(status_code=500, detail="Failed to upload image.")
 
-    # Call the new, robust Gemini analyzer
+    # Analyze image using LOCAL model (no external API!)
     try:
-        analysis_data = await vertex_gemini.analyze_image_with_gemini(gcs_uri)
+        analysis_data = local_vision.analyze_image_locally(contents)
     except Exception as e:
-        # This will be triggered after all retries fail
-        raise HTTPException(status_code=500, detail=f"Vertex AI analysis failed after retries: {e}")
+        raise HTTPException(status_code=500, detail=f"Image analysis failed: {e}")
 
-    # --- Implement Confidence Threshold Logic ---
+    # Implement Confidence Threshold Logic
     score = analysis_data.get("confidence_score", 0.0)
-    status = "rejected" # Default to rejected
+    status = "rejected"  # Default to rejected
     if score >= 0.70:
         status = "auto_accepted"
     elif 0.40 <= score < 0.70:

@@ -3,16 +3,18 @@
 import { useState, useCallback } from 'react'
 import { useRouter } from 'next/router'
 import { motion } from 'framer-motion'
+import { useAuth } from '@/contexts/AuthContext'
 import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui'
 import ThemeToggle from '@/components/ThemeToggle'
 import { useTheme } from '@/contexts/ThemeContext'
 import { Upload, Camera, Image as ImageIcon, CheckCircle, AlertCircle, ArrowLeft, ArrowRight, Sparkles } from 'lucide-react'
 import Link from 'next/link'
-import apiService from '@/services/api'
+import api from '@/services/api'
 
 export default function PhotoUpload() {
   const router = useRouter()
   const { isDarkMode } = useTheme()
+  const { user, isAuthenticated } = useAuth()
 
   const [dragActive, setDragActive] = useState(false)
   const [selectedFile, setSelectedFile] = useState(null)
@@ -71,7 +73,7 @@ export default function PhotoUpload() {
 
     try {
       // Call backend API to analyze image
-      const result = await apiService.analyzeImage(file)
+      const result = await api.analyzeImage(file)
 
       setAnalysis(result)
 
@@ -98,12 +100,18 @@ export default function PhotoUpload() {
       return
     }
 
+    // Check if user is logged in
+    if (!user) {
+      setError('Please log in to create a product.')
+      setTimeout(() => {
+        router.push('/login')
+      }, 2000)
+      return
+    }
+
     setCreatingProduct(true)
 
     try {
-      // TODO: Get auth token from context
-      const authToken = 'mock-user-123' // Replace with actual auth token
-
       // Prepare product data from AI analysis
       const productData = {
         title: analysis.suggested_title || 'Untitled Product',
@@ -124,14 +132,21 @@ export default function PhotoUpload() {
       }
 
       // Create product
-      const product = await apiService.createProduct(productData, authToken)
+      const product = await api.createProduct(productData)
 
       // Navigate to product detail or edit page
       router.push(`/products/${product.product_id}/edit`)
 
     } catch (err) {
       console.error('Failed to create product:', err)
-      setError('Failed to create product. Please try again.')
+      if (err.message && err.message.includes('401')) {
+        setError('Session expired. Please log in again.')
+        setTimeout(() => {
+          router.push('/login')
+        }, 2000)
+      } else {
+        setError('Failed to create product. Please try again.')
+      }
     } finally {
       setCreatingProduct(false)
     }
@@ -166,8 +181,8 @@ export default function PhotoUpload() {
 
   return (
     <div className={`min-h-screen p-6 transition-all duration-300 ${isDarkMode
-        ? 'bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900'
-        : 'bg-gradient-to-br from-orange-50 via-amber-50 to-yellow-50'
+      ? 'bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900'
+      : 'bg-gradient-to-br from-orange-50 via-amber-50 to-yellow-50'
       }`}>
       {/* Navigation */}
       <div className="max-w-4xl mx-auto mb-6">
@@ -175,8 +190,8 @@ export default function PhotoUpload() {
           <Link href="/dashboard">
             <motion.button
               className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors duration-300 ${isDarkMode
-                  ? 'text-orange-400 hover:bg-gray-800'
-                  : 'text-orange-700 hover:bg-orange-100'
+                ? 'text-orange-400 hover:bg-gray-800'
+                : 'text-orange-700 hover:bg-orange-100'
                 }`}
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
@@ -197,8 +212,8 @@ export default function PhotoUpload() {
           className="mb-8 text-center"
         >
           <h1 className={`text-4xl font-bold mb-4 transition-colors duration-300 ${isDarkMode
-              ? 'bg-gradient-to-r from-gray-100 to-gray-300 bg-clip-text text-transparent'
-              : 'bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent'
+            ? 'bg-gradient-to-r from-gray-100 to-gray-300 bg-clip-text text-transparent'
+            : 'bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent'
             }`}>Upload & Analyze</h1>
           <p className={`text-lg transition-colors duration-300 ${isDarkMode ? 'text-gray-300' : 'text-gray-600'
             }`}>Upload your craft photo for AI analysis and product creation</p>
@@ -211,18 +226,18 @@ export default function PhotoUpload() {
           transition={{ delay: 0.1 }}
         >
           <Card className={`mb-8 shadow-xl transition-all duration-300 ${isDarkMode
-              ? 'bg-gray-800/80 backdrop-blur-sm border-gray-700'
-              : 'bg-white/80 backdrop-blur-sm border-orange-100'
+            ? 'bg-gray-800/80 backdrop-blur-sm border-gray-700'
+            : 'bg-white/80 backdrop-blur-sm border-orange-100'
             }`}>
             <CardContent className="p-8">
               <div
                 className={`border-2 border-dashed rounded-lg p-12 text-center transition-all duration-300 ${dragActive
-                    ? isDarkMode
-                      ? 'border-orange-400 bg-orange-900/20'
-                      : 'border-orange-500 bg-orange-50'
-                    : isDarkMode
-                      ? 'border-gray-600 hover:border-gray-500'
-                      : 'border-gray-300 hover:border-gray-400'
+                  ? isDarkMode
+                    ? 'border-orange-400 bg-orange-900/20'
+                    : 'border-orange-500 bg-orange-50'
+                  : isDarkMode
+                    ? 'border-gray-600 hover:border-gray-500'
+                    : 'border-gray-300 hover:border-gray-400'
                   }`}
                 onDragEnter={handleDrag}
                 onDragLeave={handleDrag}
@@ -255,16 +270,21 @@ export default function PhotoUpload() {
                       className="hidden"
                       id="file-upload"
                     />
-                    <label htmlFor="file-upload">
+                    <label htmlFor="file-upload" className="cursor-pointer">
                       <motion.div
                         whileHover={{ scale: 1.02 }}
                         whileTap={{ scale: 0.98 }}
                       >
-                        <Button asChild>
-                          <span className="cursor-pointer bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 text-white shadow-lg">
-                            <Camera className="mr-2 h-4 w-4" />
-                            Choose Photo
-                          </span>
+                        <Button
+                          type="button"
+                          className="bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 text-white shadow-lg"
+                          onClick={(e) => {
+                            e.preventDefault()
+                            document.getElementById('file-upload').click()
+                          }}
+                        >
+                          <Camera className="mr-2 h-4 w-4" />
+                          Choose Photo
                         </Button>
                       </motion.div>
                     </label>
@@ -302,8 +322,8 @@ export default function PhotoUpload() {
             animate={{ opacity: 1, y: 0 }}
           >
             <Card className={`mb-8 transition-all duration-300 ${isDarkMode
-                ? 'bg-gray-800/80 backdrop-blur-sm border-gray-700'
-                : 'bg-white/80 backdrop-blur-sm border-orange-100'
+              ? 'bg-gray-800/80 backdrop-blur-sm border-gray-700'
+              : 'bg-white/80 backdrop-blur-sm border-orange-100'
               }`}>
               <CardContent className="p-6">
                 <div className="flex items-center space-x-3">
@@ -325,8 +345,8 @@ export default function PhotoUpload() {
           >
             {/* Image Preview */}
             <Card className={`${isDarkMode
-                ? 'bg-gray-800/90 backdrop-blur-sm border-gray-700'
-                : 'bg-white/90 backdrop-blur-sm border-orange-100'
+              ? 'bg-gray-800/90 backdrop-blur-sm border-gray-700'
+              : 'bg-white/90 backdrop-blur-sm border-orange-100'
               }`}>
               <CardHeader>
                 <CardTitle className={`flex items-center justify-between ${isDarkMode ? 'text-gray-100' : 'text-gray-800'
@@ -353,8 +373,8 @@ export default function PhotoUpload() {
             {/* AI Analysis Results */}
             {analysis.status !== 'rejected' && (
               <Card className={`${isDarkMode
-                  ? 'bg-gray-800/90 backdrop-blur-sm border-gray-700'
-                  : 'bg-white/90 backdrop-blur-sm border-orange-100'
+                ? 'bg-gray-800/90 backdrop-blur-sm border-gray-700'
+                : 'bg-white/90 backdrop-blur-sm border-orange-100'
                 }`}>
                 <CardHeader>
                   <CardTitle className={`flex items-center space-x-2 ${isDarkMode ? 'text-gray-100' : 'text-gray-800'
@@ -388,8 +408,8 @@ export default function PhotoUpload() {
                           <span
                             key={idx}
                             className={`px-3 py-1 rounded-full text-sm ${isDarkMode
-                                ? 'bg-gray-700 text-gray-300'
-                                : 'bg-gray-100 text-gray-700'
+                              ? 'bg-gray-700 text-gray-300'
+                              : 'bg-gray-100 text-gray-700'
                               }`}
                           >
                             {material}
@@ -408,8 +428,8 @@ export default function PhotoUpload() {
                           <span
                             key={idx}
                             className={`px-3 py-1 rounded-full text-sm ${isDarkMode
-                                ? 'bg-gray-700 text-gray-300'
-                                : 'bg-gray-100 text-gray-700'
+                              ? 'bg-gray-700 text-gray-300'
+                              : 'bg-gray-100 text-gray-700'
                               }`}
                           >
                             {color}
@@ -428,8 +448,8 @@ export default function PhotoUpload() {
                           <span
                             key={idx}
                             className={`px-2 py-1 rounded text-xs ${isDarkMode
-                                ? 'bg-orange-900/30 text-orange-300'
-                                : 'bg-orange-100 text-orange-700'
+                              ? 'bg-orange-900/30 text-orange-300'
+                              : 'bg-orange-100 text-orange-700'
                               }`}
                           >
                             #{tag}

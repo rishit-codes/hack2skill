@@ -244,8 +244,8 @@ async def get_user_product_stats(
 @router.post(
     "/{product_id}/like",
     status_code=status.HTTP_200_OK,
-    summary="Like Product",
-    description="Like/unlike a product"
+    summary="Like/Unlike Product",
+    description="Toggle like on a product"
 )
 async def toggle_product_like(
     product_id: str,
@@ -254,10 +254,55 @@ async def toggle_product_like(
     """
     Toggle like on a product.
     
-    TODO: Implement proper like tracking per user in Firestore
-    For now, this is a placeholder endpoint.
+    **Returns:**
+    - liked: Boolean indicating if product is now liked
+    - likes_count: Total likes for the product
     """
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED,
-        detail="Like feature coming soon"
+    result = await product_service.toggle_like(product_id, user_id)
+    
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Product not found"
+        )
+    
+    return result
+
+@router.get(
+    "/search",
+    response_model=ProductListResponse,
+    summary="Search Products",
+    description="Search products by title, description, or tags"
+)
+async def search_products(
+    q: str = Query(..., min_length=1, description="Search query"),
+    category: Optional[ProductCategory] = Query(None, description="Filter by category"),
+    page: int = Query(1, ge=1, description="Page number"),
+    page_size: int = Query(20, ge=1, le=100, description="Items per page")
+) -> ProductListResponse:
+    """
+    Search for products.
+    
+    **Search includes:**
+    - Product title
+    - Product description
+    - Product tags
+    
+    **Only PUBLIC products are searchable**
+    """
+    products, total = await product_service.search_products(
+        query=q,
+        category=category,
+        page=page,
+        page_size=page_size
+    )
+    
+    has_more = (page * page_size) < total
+    
+    return ProductListResponse(
+        products=products,
+        total=total,
+        page=page,
+        page_size=page_size,
+        has_more=has_more
     )

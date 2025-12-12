@@ -34,11 +34,12 @@ class ProductImage(BaseModel):
     @field_validator('gcs_uri', 'enhanced_uri')
     @classmethod
     def validate_uri(cls, v: Optional[str]) -> Optional[str]:
-        """Validate GCS URI format"""
+        """Validate GCS URI or local storage URI format"""
         if v is None:
             return v
-        if not v.startswith('gs://'):
-            raise ValueError('URI must start with gs://')
+        # Allow both GCS URIs and local storage URIs
+        if not (v.startswith('gs://') or v.startswith('/uploads/')):
+            raise ValueError('URI must start with gs:// or /uploads/')
         return v
 
 class ProductPricing(BaseModel):

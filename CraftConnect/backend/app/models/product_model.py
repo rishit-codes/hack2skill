@@ -3,8 +3,8 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime
 import uuid
 
-from google.cloud import firestore
-from app.cloud_services.firestore_db import get_firestore_client
+# Database operations handled by custom SQLite client
+from app.cloud_services.database import get_database_client
 from app.schemas.product import (
     ProductCreateRequest,
     ProductUpdateRequest,
@@ -19,30 +19,14 @@ class ProductService:
     """Service layer for product management with security controls"""
     
     def __init__(self):
-        self.db = get_firestore_client()
+        self.db = get_database_client()
         self.collection_name = "products"
         
     def _generate_product_id(self) -> str:
         """Generate unique product ID"""
         return str(uuid.uuid4())
     
-    def _sanitize_firestore_data(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        """Sanitize data for Firestore storage"""
-        # Convert datetime objects to timestamps
-        sanitized = {}
-        for key, value in data.items():
-            if isinstance(value, datetime):
-                sanitized[key] = value
-            elif isinstance(value, list):
-                sanitized[key] = [
-                    self._sanitize_firestore_data(item) if isinstance(item, dict) else item
-                    for item in value
-                ]
-            elif isinstance(value, dict):
-                sanitized[key] = self._sanitize_firestore_data(value)
-            else:
-                sanitized[key] = value
-        return sanitized
+
     
     async def create_product(
         self, 
@@ -89,12 +73,8 @@ class ProductService:
                 "likes_count": 0,
             }
             
-            # Sanitize data for Firestore
-            sanitized_doc = self._sanitize_firestore_data(product_doc)
-            
-            # Store in Firestore
-            doc_ref = self.db.collection(self.collection_name).document(product_id)
-            doc_ref.set(sanitized_doc)
+            # Store in database
+            self.db.set_document(self.collection_name, product_id, product_doc)
             
             logger.info(f"Product created successfully: {product_id} by user {user_id}")
             
@@ -120,14 +100,11 @@ class ProductService:
             ProductResponse if found and authorized, None otherwise
         """
         try:
-            doc_ref = self.db.collection(self.collection_name).document(product_id)
-            doc = doc_ref.get()
+            product_data = self.db.get_document(self.collection_name, product_id)
             
-            if not doc.exists:
+            if not product_data:
                 logger.warning(f"Product not found: {product_id}")
                 return None
-            
-            product_data = doc.to_dict()
             
             # Authorization check: Only owner can view PRIVATE/DRAFT products
             if product_data["status"] in [ProductStatus.PRIVATE.value, ProductStatus.DRAFT.value]:
@@ -140,7 +117,8 @@ class ProductService:
             
             # Increment view count (non-blocking)
             if requesting_user_id != product_data["user_id"]:
-                doc_ref.update({"views_count": firestore.Increment(1)})
+                current_views = product_data.get("views_count", 0)
+                self.db.update_document(self.collection_name, product_id, {"views_count": current_views + 1})
             
             return ProductResponse(**product_data)
             
@@ -166,14 +144,11 @@ class ProductService:
             Updated ProductResponse or None if unauthorized
         """
         try:
-            doc_ref = self.db.collection(self.collection_name).document(product_id)
-            doc = doc_ref.get()
+            product_data = self.db.get_document(self.collection_name, product_id)
             
-            if not doc.exists:
+            if not product_data:
                 logger.warning(f"Product not found for update: {product_id}")
                 return None
-            
-            product_data = doc.to_dict()
             
             # Authorization: Only owner can update
             if product_data["user_id"] != user_id:
@@ -189,9 +164,11 @@ class ProductService:
                 if field == "images" and value is not None:
                     update_dict[field] = [img.model_dump() for img in value]
                 elif field == "pricing" and value is not None:
-                    update_dict[field] = value.model_dump()
+                    # Handle both Pydantic models and dicts
+                    update_dict[field] = value.model_dump() if hasattr(value, 'model_dump') else value
                 elif field == "dimensions" and value is not None:
-                    update_dict[field] = value.model_dump()
+                    # Handle both Pydantic models and dicts
+                    update_dict[field] = value.model_dump() if hasattr(value, 'model_dump') else value
                 elif field == "category" and value is not None:
                     update_dict[field] = value.value
                 elif field == "status" and value is not None:
@@ -202,12 +179,11 @@ class ProductService:
             # Always update timestamp
             update_dict["updated_at"] = datetime.utcnow()
             
-            # Sanitize and update
-            sanitized_update = self._sanitize_firestore_data(update_dict)
-            doc_ref.update(sanitized_update)
+            # Update in database
+            self.db.update_document(self.collection_name, product_id, update_dict)
             
             # Fetch updated document
-            updated_doc = doc_ref.get().to_dict()
+            updated_doc = self.db.get_document(self.collection_name, product_id)
             
             logger.info(f"Product updated successfully: {product_id}")
             return ProductResponse(**updated_doc)
@@ -232,13 +208,10 @@ class ProductService:
             True if deleted, False otherwise
         """
         try:
-            doc_ref = self.db.collection(self.collection_name).document(product_id)
-            doc = doc_ref.get()
+            product_data = self.db.get_document(self.collection_name, product_id)
             
-            if not doc.exists:
+            if not product_data:
                 return False
-            
-            product_data = doc.to_dict()
             
             # Authorization: Only owner can delete
             if product_data["user_id"] != user_id:
@@ -249,7 +222,7 @@ class ProductService:
                 return False
             
             # Soft delete: set status to ARCHIVED
-            doc_ref.update({
+            self.db.update_document(self.collection_name, product_id, {
                 "status": ProductStatus.ARCHIVED.value,
                 "updated_at": datetime.utcnow()
             })
@@ -287,34 +260,40 @@ class ProductService:
             page_size = min(page_size, 100)
             offset = (page - 1) * page_size
             
-            # Build query
-            query = self.db.collection(self.collection_name)
+            # Build query conditions
+            where_conditions = []
+            params = []
             
             # If user_id provided, show all their products
             if user_id:
-                query = query.where("user_id", "==", user_id)
+                where_conditions.append("user_id = ?")
+                params.append(user_id)
             else:
                 # Public listing: only show PUBLIC products
-                query = query.where("status", "==", ProductStatus.PUBLIC.value)
+                where_conditions.append("status = ?")
+                params.append(ProductStatus.PUBLIC.value)
             
             if status and not user_id:
-                query = query.where("status", "==", status.value)
+                where_conditions.append("status = ?")
+                params.append(status.value)
             
             if category:
-                query = query.where("category", "==", category.value)
+                where_conditions.append("category = ?")
+                params.append(category.value)
             
-            # Order by creation date (newest first)
-            query = query.order_by("created_at", direction=firestore.Query.DESCENDING)
+            where_clause = " AND ".join(where_conditions) if where_conditions else ""
             
-            # Get total count
-            total = len(query.get())
+            # Get all matching products
+            all_products = self.db.query_collection(self.collection_name, where_clause, tuple(params))
+            
+            # Sort by creation date (newest first)
+            all_products.sort(key=lambda x: x.get("created_at", ""), reverse=True)
+            
+            total = len(all_products)
             
             # Apply pagination
-            query = query.limit(page_size).offset(offset)
-            
-            # Execute query
-            docs = query.get()
-            products = [ProductResponse(**doc.to_dict()) for doc in docs]
+            paginated_data = all_products[offset:offset + page_size]
+            products = [ProductResponse(**data) for data in paginated_data]
             
             return products, total
             
@@ -322,11 +301,140 @@ class ProductService:
             logger.error(f"Failed to list products: {e}", exc_info=True)
             return [], 0
     
+    async def toggle_like(
+        self,
+        product_id: str,
+        user_id: str
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Toggle like on a product by a user
+        
+        Args:
+            product_id: Product to like/unlike
+            user_id: User performing the action
+            
+        Returns:
+            Dict with {'liked': bool, 'likes_count': int} or None if product not found
+        """
+        try:
+            # Get product data
+            product_data = self.db.get_document(self.collection_name, product_id)
+            if not product_data:
+                return None
+            
+            # Simple like tracking using a likes table
+            import sqlite3
+            with sqlite3.connect(self.db.db_path) as conn:
+                # Check if already liked
+                cursor = conn.execute(
+                    "SELECT 1 FROM product_likes WHERE product_id = ? AND user_id = ?",
+                    (product_id, user_id)
+                )
+                already_liked = cursor.fetchone() is not None
+                
+                if already_liked:
+                    # Unlike: remove like and decrement count
+                    conn.execute(
+                        "DELETE FROM product_likes WHERE product_id = ? AND user_id = ?",
+                        (product_id, user_id)
+                    )
+                    current_likes = product_data.get("likes_count", 0)
+                    new_likes = max(0, current_likes - 1)
+                    liked = False
+                    logger.info(f"User {user_id} unliked product {product_id}")
+                else:
+                    # Like: add like and increment count
+                    conn.execute(
+                        "INSERT OR IGNORE INTO product_likes (product_id, user_id, liked_at) VALUES (?, ?, ?)",
+                        (product_id, user_id, datetime.utcnow().isoformat())
+                    )
+                    current_likes = product_data.get("likes_count", 0)
+                    new_likes = current_likes + 1
+                    liked = True
+                    logger.info(f"User {user_id} liked product {product_id}")
+                
+                # Update likes count
+                self.db.update_document(self.collection_name, product_id, {"likes_count": new_likes})
+                conn.commit()
+                
+            likes_count = new_likes
+            
+            return {
+                "liked": liked,
+                "likes_count": likes_count
+            }
+            
+        except Exception as e:
+            logger.error(f"Failed to toggle like: {e}", exc_info=True)
+            return None
+    
+    async def search_products(
+        self,
+        query: str,
+        category: Optional[ProductCategory] = None,
+        page: int = 1,
+        page_size: int = 20
+    ) -> tuple[List[ProductResponse], int]:
+        """
+        Search products by title or description
+        
+        Args:
+            query: Search query string
+            category: Optional category filter
+            page: Page number
+            page_size: Items per page
+            
+        Returns:
+            Tuple of (products list, total count)
+        """
+        try:
+            # Security: Limit page size
+            page_size = min(page_size, 100)
+            
+            # Build query conditions
+            where_conditions = ["status = ?"]
+            params = [ProductStatus.PUBLIC.value]
+            
+            if category:
+                where_conditions.append("category = ?")
+                params.append(category.value)
+            
+            where_clause = " AND ".join(where_conditions)
+            
+            # Get all matching documents
+            all_products = self.db.query_collection(self.collection_name, where_clause, tuple(params))
+            
+            # Filter by search query (case-insensitive)
+            query_lower = query.lower()
+            matching_products = []
+            
+            for data in all_products:
+                title = data.get("title", "").lower()
+                description = data.get("description", "").lower()
+                tags = [tag.lower() for tag in data.get("tags", [])] if data.get("tags") else []
+                
+                # Check if query matches title, description, or tags
+                if (query_lower in title or 
+                    query_lower in description or 
+                    any(query_lower in tag for tag in tags)):
+                    matching_products.append(ProductResponse(**data))
+            
+            total = len(matching_products)
+            
+            # Apply pagination
+            offset = (page - 1) * page_size
+            paginated_products = matching_products[offset:offset + page_size]
+            
+            return paginated_products, total
+            
+        except Exception as e:
+            logger.error(f"Failed to search products: {e}", exc_info=True)
+            return [], 0
+    
     async def get_user_stats(self, user_id: str) -> Dict[str, Any]:
         """Get statistics for user's products"""
         try:
-            query = self.db.collection(self.collection_name).where("user_id", "==", user_id)
-            docs = query.get()
+            products = self.db.query_collection(self.collection_name, "user_id = ?", (user_id,))
             
             stats = {
                 "total_products": 0,
@@ -336,8 +444,7 @@ class ProductService:
                 "total_likes": 0
             }
             
-            for doc in docs:
-                data = doc.to_dict()
+            for data in products:
                 stats["total_products"] += 1
                 
                 # Count by status

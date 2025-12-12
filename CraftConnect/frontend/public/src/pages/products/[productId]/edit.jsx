@@ -3,11 +3,12 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/router'
 import { motion } from 'framer-motion'
+import { useAuth } from '@/contexts/AuthContext'
 import { Button, Card, CardContent, CardHeader, CardTitle } from '@/components/ui'
 import { useTheme } from '@/contexts/ThemeContext'
 import ThemeToggle from '@/components/ThemeToggle'
 import Link from 'next/link'
-import apiService from '@/services/api'
+import api from '@/services/api'
 import {
     ArrowLeft,
     Save,
@@ -15,13 +16,17 @@ import {
     Package,
     Image as ImageIcon,
     Plus,
-    X
+    X,
+    Sparkles,
+    DollarSign,
+    Loader
 } from 'lucide-react'
 
 export default function ProductEdit() {
     const router = useRouter()
     const { productId } = router.query
     const { isDarkMode } = useTheme()
+    const { user, isAuthenticated } = useAuth()
 
     const [loading, setLoading] = useState(true)
     const [saving, setSaving] = useState(false)
@@ -52,6 +57,11 @@ export default function ProductEdit() {
     const [newColor, setNewColor] = useState('')
     const [newTag, setNewTag] = useState('')
 
+    // AI features state
+    const [generatingStory, setGeneratingStory] = useState(false)
+    const [generatingPrice, setGeneratingPrice] = useState(false)
+    const [aiError, setAiError] = useState(null)
+
     const categories = [
         'pottery', 'textiles', 'woodwork', 'jewelry',
         'metalwork', 'painting', 'sculpture', 'leather',
@@ -71,9 +81,7 @@ export default function ProductEdit() {
         setError(null)
 
         try {
-            // TODO: Get auth token from context
-            const authToken = 'mock-user-123'
-            const product = await apiService.getProduct(productId, authToken)
+            const product = await api.getProduct(productId)
 
             // Populate form with product data
             setFormData({
@@ -105,15 +113,77 @@ export default function ProductEdit() {
         }
     }
 
+    // AI Story Generation
+    const handleGenerateStory = async () => {
+        setGeneratingStory(true)
+        setAiError(null)
+
+        try {
+            const productData = {
+                title: formData.title,
+                description: formData.description,
+                category: formData.category,
+                materials: formData.materials,
+                colors: formData.colors,
+                tags: formData.tags
+            }
+
+            const result = await api.generateStory(productData)
+
+            // Update story field with AI-generated content
+            setFormData(prev => ({
+                ...prev,
+                story: result.story || result.generated_story || ''
+            }))
+
+        } catch (err) {
+            console.error('Story generation failed:', err)
+            setAiError('Failed to generate story. Please try again.')
+        } finally {
+            setGeneratingStory(false)
+        }
+    }
+
+    // AI Pricing Suggestion
+    const handleGetPriceSuggestion = async () => {
+        setGeneratingPrice(true)
+        setAiError(null)
+
+        try {
+            const productDetails = {
+                title: formData.title,
+                category: formData.category,
+                materials: formData.materials,
+                materials_cost: formData.pricing.materials_cost,
+                labor_hours: formData.pricing.labor_hours
+            }
+
+            const result = await api.getPriceSuggestion(productDetails)
+
+            // Update pricing with AI suggestion
+            setFormData(prev => ({
+                ...prev,
+                pricing: {
+                    ...prev.pricing,
+                    suggested_price: result.suggested_price || result.price,
+                    final_price: result.suggested_price || result.price
+                }
+            }))
+
+        } catch (err) {
+            console.error('Price suggestion failed:', err)
+            setAiError('Failed to get price suggestion. Please try again.')
+        } finally {
+            setGeneratingPrice(false)
+        }
+    }
+
     const handleSubmit = async (e) => {
         e.preventDefault()
         setSaving(true)
         setError(null)
 
         try {
-            // TODO: Get auth token from context
-            const authToken = 'mock-user-123'
-
             // Prepare update data
             const updateData = {
                 ...formData,
@@ -121,7 +191,7 @@ export default function ProductEdit() {
                 dimensions: formData.dimensions.length_cm ? formData.dimensions : null
             }
 
-            await apiService.updateProduct(productId, updateData, authToken)
+            await api.updateProduct(productId, updateData)
 
             // Navigate to product detail
             router.push(`/product_detail?productId=${productId}`)
@@ -167,8 +237,8 @@ export default function ProductEdit() {
     if (loading) {
         return (
             <div className={`min-h-screen p-6 transition-all duration-300 ${isDarkMode
-                    ? 'bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900'
-                    : 'bg-gradient-to-br from-orange-50 via-amber-50 to-yellow-50'
+                ? 'bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900'
+                : 'bg-gradient-to-br from-orange-50 via-amber-50 to-yellow-50'
                 }`}>
                 <div className="max-w-4xl mx-auto">
                     <div className="animate-pulse space-y-6">
@@ -182,8 +252,8 @@ export default function ProductEdit() {
 
     return (
         <div className={`min-h-screen p-6 transition-all duration-300 ${isDarkMode
-                ? 'bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900'
-                : 'bg-gradient-to-br from-orange-50 via-amber-50 to-yellow-50'
+            ? 'bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900'
+            : 'bg-gradient-to-br from-orange-50 via-amber-50 to-yellow-50'
             }`}>
             <div className="max-w-4xl mx-auto">
                 {/* Header */}
@@ -191,8 +261,8 @@ export default function ProductEdit() {
                     <Link href={`/product_detail?productId=${productId}`}>
                         <motion.button
                             className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors duration-300 ${isDarkMode
-                                    ? 'text-orange-400 hover:bg-gray-800'
-                                    : 'text-orange-700 hover:bg-orange-100'
+                                ? 'text-orange-400 hover:bg-gray-800'
+                                : 'text-orange-700 hover:bg-orange-100'
                                 }`}
                             whileHover={{ scale: 1.05 }}
                             whileTap={{ scale: 0.95 }}
@@ -219,8 +289,8 @@ export default function ProductEdit() {
                     className="mb-8"
                 >
                     <h1 className={`text-4xl font-bold mb-2 ${isDarkMode
-                            ? 'bg-gradient-to-r from-gray-100 to-gray-300 bg-clip-text text-transparent'
-                            : 'bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent'
+                        ? 'bg-gradient-to-r from-gray-100 to-gray-300 bg-clip-text text-transparent'
+                        : 'bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent'
                         }`}>Edit Product</h1>
                     <p className={`${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
                         Update your product details and settings
@@ -246,8 +316,8 @@ export default function ProductEdit() {
                 <form onSubmit={handleSubmit} className="space-y-6">
                     {/* Basic Information */}
                     <Card className={`${isDarkMode
-                            ? 'bg-gray-800/90 backdrop-blur-sm border-gray-700'
-                            : 'bg-white/90 backdrop-blur-sm border-orange-100'
+                        ? 'bg-gray-800/90 backdrop-blur-sm border-gray-700'
+                        : 'bg-white/90 backdrop-blur-sm border-orange-100'
                         }`}>
                         <CardHeader>
                             <CardTitle className={isDarkMode ? 'text-gray-100' : 'text-gray-800'}>
@@ -266,8 +336,8 @@ export default function ProductEdit() {
                                     value={formData.title}
                                     onChange={(e) => handleChange('title', e.target.value)}
                                     className={`w-full px-4 py-2 rounded-lg border transition-colors ${isDarkMode
-                                            ? 'bg-gray-700 border-gray-600 text-gray-100'
-                                            : 'bg-white border-gray-300 text-gray-900'
+                                        ? 'bg-gray-700 border-gray-600 text-gray-100'
+                                        : 'bg-white border-gray-300 text-gray-900'
                                         }`}
                                     placeholder="e.g., Handcrafted Ceramic Vase"
                                 />
@@ -284,8 +354,8 @@ export default function ProductEdit() {
                                     value={formData.description}
                                     onChange={(e) => handleChange('description', e.target.value)}
                                     className={`w-full px-4 py-2 rounded-lg border transition-colors ${isDarkMode
-                                            ? 'bg-gray-700 border-gray-600 text-gray-100'
-                                            : 'bg-white border-gray-300 text-gray-900'
+                                        ? 'bg-gray-700 border-gray-600 text-gray-100'
+                                        : 'bg-white border-gray-300 text-gray-900'
                                         }`}
                                     placeholder="Describe your product..."
                                 />
@@ -301,8 +371,8 @@ export default function ProductEdit() {
                                         value={formData.category}
                                         onChange={(e) => handleChange('category', e.target.value)}
                                         className={`w-full px-4 py-2 rounded-lg border transition-colors ${isDarkMode
-                                                ? 'bg-gray-700 border-gray-600 text-gray-100'
-                                                : 'bg-white border-gray-300 text-gray-900'
+                                            ? 'bg-gray-700 border-gray-600 text-gray-100'
+                                            : 'bg-white border-gray-300 text-gray-900'
                                             }`}
                                     >
                                         {categories.map(cat => (
@@ -322,8 +392,8 @@ export default function ProductEdit() {
                                         value={formData.status}
                                         onChange={(e) => handleChange('status', e.target.value)}
                                         className={`w-full px-4 py-2 rounded-lg border transition-colors ${isDarkMode
-                                                ? 'bg-gray-700 border-gray-600 text-gray-100'
-                                                : 'bg-white border-gray-300 text-gray-900'
+                                            ? 'bg-gray-700 border-gray-600 text-gray-100'
+                                            : 'bg-white border-gray-300 text-gray-900'
                                             }`}
                                     >
                                         {statuses.map(status => (
@@ -336,17 +406,41 @@ export default function ProductEdit() {
                             </div>
 
                             <div>
-                                <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'
-                                    }`}>
-                                    Artisan Story
-                                </label>
+                                <div className="flex items-center justify-between mb-2">
+                                    <label className={`block text-sm font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                                        Artisan Story
+                                    </label>
+                                    <Button
+                                        type="button"
+                                        onClick={handleGenerateStory}
+                                        disabled={generatingStory || !formData.title}
+                                        variant="outline"
+                                        size="sm"
+                                        className={`flex items-center space-x-2 ${isDarkMode
+                                            ? 'border-orange-500/50 text-orange-400 hover:bg-orange-500/10'
+                                            : 'border-orange-500 text-orange-600 hover:bg-orange-50'
+                                            }`}
+                                    >
+                                        {generatingStory ? (
+                                            <>
+                                                <Loader className="h-4 w-4 animate-spin" />
+                                                <span>Generating...</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Sparkles className="h-4 w-4" />
+                                                <span>Generate Story</span>
+                                            </>
+                                        )}
+                                    </Button>
+                                </div>
                                 <textarea
                                     rows={4}
                                     value={formData.story}
                                     onChange={(e) => handleChange('story', e.target.value)}
                                     className={`w-full px-4 py-2 rounded-lg border transition-colors ${isDarkMode
-                                            ? 'bg-gray-700 border-gray-600 text-gray-100'
-                                            : 'bg-white border-gray-300 text-gray-900'
+                                        ? 'bg-gray-700 border-gray-600 text-gray-100'
+                                        : 'bg-white border-gray-300 text-gray-900'
                                         }`}
                                     placeholder="Tell the story behind this piece..."
                                 />
@@ -356,8 +450,8 @@ export default function ProductEdit() {
 
                     {/* Materials, Colors, Tags */}
                     <Card className={`${isDarkMode
-                            ? 'bg-gray-800/90 backdrop-blur-sm border-gray-700'
-                            : 'bg-white/90 backdrop-blur-sm border-orange-100'
+                        ? 'bg-gray-800/90 backdrop-blur-sm border-gray-700'
+                        : 'bg-white/90 backdrop-blur-sm border-orange-100'
                         }`}>
                         <CardHeader>
                             <CardTitle className={isDarkMode ? 'text-gray-100' : 'text-gray-800'}>
@@ -378,8 +472,8 @@ export default function ProductEdit() {
                                         onChange={(e) => setNewMaterial(e.target.value)}
                                         onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addItem('materials', newMaterial, setNewMaterial))}
                                         className={`flex-1 px-4 py-2 rounded-lg border transition-colors ${isDarkMode
-                                                ? 'bg-gray-700 border-gray-600 text-gray-100'
-                                                : 'bg-white border-gray-300 text-gray-900'
+                                            ? 'bg-gray-700 border-gray-600 text-gray-100'
+                                            : 'bg-white border-gray-300 text-gray-900'
                                             }`}
                                         placeholder="Add material..."
                                     />
@@ -396,8 +490,8 @@ export default function ProductEdit() {
                                         <span
                                             key={idx}
                                             className={`px-3 py-1 rounded-full text-sm flex items-center space-x-2 ${isDarkMode
-                                                    ? 'bg-gray-700 text-gray-300'
-                                                    : 'bg-gray-100 text-gray-700'
+                                                ? 'bg-gray-700 text-gray-300'
+                                                : 'bg-gray-100 text-gray-700'
                                                 }`}
                                         >
                                             <span>{material}</span>
@@ -426,8 +520,8 @@ export default function ProductEdit() {
                                         onChange={(e) => setNewColor(e.target.value)}
                                         onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addItem('colors', newColor, setNewColor))}
                                         className={`flex-1 px-4 py-2 rounded-lg border transition-colors ${isDarkMode
-                                                ? 'bg-gray-700 border-gray-600 text-gray-100'
-                                                : 'bg-white border-gray-300 text-gray-900'
+                                            ? 'bg-gray-700 border-gray-600 text-gray-100'
+                                            : 'bg-white border-gray-300 text-gray-900'
                                             }`}
                                         placeholder="Add color..."
                                     />
@@ -444,8 +538,8 @@ export default function ProductEdit() {
                                         <span
                                             key={idx}
                                             className={`px-3 py-1 rounded-full text-sm flex items-center space-x-2 ${isDarkMode
-                                                    ? 'bg-gray-700 text-gray-300'
-                                                    : 'bg-gray-100 text-gray-700'
+                                                ? 'bg-gray-700 text-gray-300'
+                                                : 'bg-gray-100 text-gray-700'
                                                 }`}
                                         >
                                             <span>{color}</span>
@@ -474,8 +568,8 @@ export default function ProductEdit() {
                                         onChange={(e) => setNewTag(e.target.value)}
                                         onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addItem('tags', newTag, setNewTag))}
                                         className={`flex-1 px-4 py-2 rounded-lg border transition-colors ${isDarkMode
-                                                ? 'bg-gray-700 border-gray-600 text-gray-100'
-                                                : 'bg-white border-gray-300 text-gray-900'
+                                            ? 'bg-gray-700 border-gray-600 text-gray-100'
+                                            : 'bg-white border-gray-300 text-gray-900'
                                             }`}
                                         placeholder="Add tag..."
                                     />
@@ -492,8 +586,8 @@ export default function ProductEdit() {
                                         <span
                                             key={idx}
                                             className={`px-2 py-1 rounded text-xs flex items-center space-x-2 ${isDarkMode
-                                                    ? 'bg-orange-900/30 text-orange-300'
-                                                    : 'bg-orange-100 text-orange-700'
+                                                ? 'bg-orange-900/30 text-orange-300'
+                                                : 'bg-orange-100 text-orange-700'
                                                 }`}
                                         >
                                             <span>#{tag}</span>
@@ -513,13 +607,38 @@ export default function ProductEdit() {
 
                     {/* Pricing */}
                     <Card className={`${isDarkMode
-                            ? 'bg-gray-800/90 backdrop-blur-sm border-gray-700'
-                            : 'bg-white/90 backdrop-blur-sm border-orange-100'
+                        ? 'bg-gray-800/90 backdrop-blur-sm border-gray-700'
+                        : 'bg-white/90 backdrop-blur-sm border-orange-100'
                         }`}>
                         <CardHeader>
-                            <CardTitle className={isDarkMode ? 'text-gray-100' : 'text-gray-800'}>
-                                Pricing
-                            </CardTitle>
+                            <div className="flex items-center justify-between">
+                                <CardTitle className={isDarkMode ? 'text-gray-100' : 'text-gray-800'}>
+                                    Pricing
+                                </CardTitle>
+                                <Button
+                                    type="button"
+                                    onClick={handleGetPriceSuggestion}
+                                    disabled={generatingPrice || !formData.title || !formData.pricing.materials_cost}
+                                    variant="outline"
+                                    size="sm"
+                                    className={`flex items-center space-x-2 ${isDarkMode
+                                        ? 'border-orange-500/50 text-orange-400 hover:bg-orange-500/10'
+                                        : 'border-orange-500 text-orange-600 hover:bg-orange-50'
+                                        }`}
+                                >
+                                    {generatingPrice ? (
+                                        <>
+                                            <Loader className="h-4 w-4 animate-spin" />
+                                            <span>Getting Price...</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <DollarSign className="h-4 w-4" />
+                                            <span>Get AI Price</span>
+                                        </>
+                                    )}
+                                </Button>
+                            </div>
                         </CardHeader>
                         <CardContent className="space-y-4">
                             <div className="grid grid-cols-3 gap-4">
@@ -534,8 +653,8 @@ export default function ProductEdit() {
                                         value={formData.pricing.materials_cost}
                                         onChange={(e) => handleNestedChange('pricing', 'materials_cost', parseFloat(e.target.value))}
                                         className={`w-full px-4 py-2 rounded-lg border transition-colors ${isDarkMode
-                                                ? 'bg-gray-700 border-gray-600 text-gray-100'
-                                                : 'bg-white border-gray-300 text-gray-900'
+                                            ? 'bg-gray-700 border-gray-600 text-gray-100'
+                                            : 'bg-white border-gray-300 text-gray-900'
                                             }`}
                                     />
                                 </div>
@@ -551,8 +670,8 @@ export default function ProductEdit() {
                                         value={formData.pricing.labor_hours}
                                         onChange={(e) => handleNestedChange('pricing', 'labor_hours', parseFloat(e.target.value))}
                                         className={`w-full px-4 py-2 rounded-lg border transition-colors ${isDarkMode
-                                                ? 'bg-gray-700 border-gray-600 text-gray-100'
-                                                : 'bg-white border-gray-300 text-gray-900'
+                                            ? 'bg-gray-700 border-gray-600 text-gray-100'
+                                            : 'bg-white border-gray-300 text-gray-900'
                                             }`}
                                     />
                                 </div>
@@ -568,8 +687,8 @@ export default function ProductEdit() {
                                         value={formData.pricing.final_price || ''}
                                         onChange={(e) => handleNestedChange('pricing', 'final_price', e.target.value ? parseFloat(e.target.value) : null)}
                                         className={`w-full px-4 py-2 rounded-lg border transition-colors ${isDarkMode
-                                                ? 'bg-gray-700 border-gray-600 text-gray-100'
-                                                : 'bg-white border-gray-300 text-gray-900'
+                                            ? 'bg-gray-700 border-gray-600 text-gray-100'
+                                            : 'bg-white border-gray-300 text-gray-900'
                                             }`}
                                     />
                                 </div>

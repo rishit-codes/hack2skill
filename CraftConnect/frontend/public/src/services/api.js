@@ -3,21 +3,48 @@
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
 class ApiService {
+  // Get auth token from localStorage
+  getAuthToken() {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('auth_token')
+    }
+    return null
+  }
+
   async request(endpoint, options = {}) {
     const url = `${API_BASE_URL}${endpoint}`
+
+    // Auto-inject auth token if available
+    const token = this.getAuthToken()
+    const headers = {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    }
+
+    if (token && !options.skipAuth) {
+      headers['Authorization'] = `Bearer ${token}`
+    }
+
     const config = {
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers,
-      },
+      headers,
       ...options,
     }
 
     try {
       const response = await fetch(url, config)
 
+      // Handle 401 Unauthorized
+      if (response.status === 401 && typeof window !== 'undefined') {
+        // Clear invalid token
+        localStorage.removeItem('auth_token')
+        localStorage.removeItem('user_data')
+        // Optionally redirect to login
+        // window.location.href = '/login'
+      }
+
       if (!response.ok) {
-        throw new Error(`API request failed: ${response.status}`)
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.detail || `API request failed: ${response.status}`)
       }
 
       return await response.json()
@@ -25,6 +52,27 @@ class ApiService {
       console.error('API request error:', error)
       throw error
     }
+  }
+
+  // Authentication endpoints
+  async login(email, password) {
+    return this.request('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+      skipAuth: true // Don't include token for login
+    })
+  }
+
+  async register(userData) {
+    return this.request('/auth/register', {
+      method: 'POST',
+      body: JSON.stringify(userData),
+      skipAuth: true // Don't include token for registration
+    })
+  }
+
+  async getCurrentUser() {
+    return this.request('/auth/me')
   }
 
   // Image analysis endpoints
@@ -72,43 +120,31 @@ class ApiService {
   }
 
   // Product Management endpoints
-  async createProduct(productData, authToken) {
+  async createProduct(productData) {
     return this.request('/products', {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${authToken}`
-      },
       body: JSON.stringify(productData),
     })
   }
 
-  async getProduct(productId, authToken = null) {
-    const headers = authToken ? { 'Authorization': `Bearer ${authToken}` } : {}
-    return this.request(`/products/${productId}`, {
-      headers
-    })
+  async getProduct(productId) {
+    return this.request(`/products/${productId}`)
   }
 
-  async updateProduct(productId, productData, authToken) {
+  async updateProduct(productId, productData) {
     return this.request(`/products/${productId}`, {
       method: 'PUT',
-      headers: {
-        'Authorization': `Bearer ${authToken}`
-      },
       body: JSON.stringify(productData),
     })
   }
 
-  async deleteProduct(productId, authToken) {
+  async deleteProduct(productId) {
     return this.request(`/products/${productId}`, {
       method: 'DELETE',
-      headers: {
-        'Authorization': `Bearer ${authToken}`
-      },
     })
   }
 
-  async listProducts(filters = {}, authToken = null) {
+  async listProducts(filters = {}) {
     const params = new URLSearchParams()
 
     if (filters.ownerId) params.append('owner_id', filters.ownerId)
@@ -117,20 +153,29 @@ class ApiService {
     if (filters.page) params.append('page', filters.page)
     if (filters.pageSize) params.append('page_size', filters.pageSize)
 
-    const headers = authToken ? { 'Authorization': `Bearer ${authToken}` } : {}
     const queryString = params.toString()
+    return this.request(`/products${queryString ? '?' + queryString : ''}`)
+  }
 
-    return this.request(`/products${queryString ? '?' + queryString : ''}`, {
-      headers
+  async searchProducts(query, filters = {}) {
+    const params = new URLSearchParams()
+    params.append('q', query)
+
+    if (filters.category) params.append('category', filters.category)
+    if (filters.page) params.append('page', filters.page)
+    if (filters.pageSize) params.append('page_size', filters.pageSize)
+
+    return this.request(`/products/search?${params.toString()}`)
+  }
+
+  async toggleProductLike(productId) {
+    return this.request(`/products/${productId}/like`, {
+      method: 'POST',
     })
   }
 
-  async getUserProductStats(userId, authToken) {
-    return this.request(`/products/users/${userId}/stats`, {
-      headers: {
-        'Authorization': `Bearer ${authToken}`
-      }
-    })
+  async getUserProductStats(userId) {
+    return this.request(`/products/users/${userId}/stats`)
   }
 
   // Recommendations endpoints
@@ -153,6 +198,18 @@ class ApiService {
 
   async getSalesAnalytics(userId, timeframe = '30d') {
     return this.request(`/sales/analytics?user_id=${userId}&timeframe=${timeframe}`)
+  }
+
+  // User profile endpoints
+  async getUserProfile(userId) {
+    return this.request(`/users/${userId}`)
+  }
+
+  async updateUserProfile(userId, profileData) {
+    return this.request(`/users/${userId}`, {
+      method: 'PUT',
+      body: JSON.stringify(profileData),
+    })
   }
 
   // User profile endpoints

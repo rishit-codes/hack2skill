@@ -11,6 +11,14 @@ logger = logging.getLogger(__name__)              # for transation glossary
 
 CACHE_COLLECTION = "copilot_cache"
 
+def get_firestore_client():
+    """Returns the Firestore AsyncClient instance for synchronous operations."""
+    # For sync operations, we'll use the db instance directly
+    # Product model will handle async properly
+    from google.cloud import firestore
+    return firestore.Client(project=settings.PROJECT_ID, database=settings.FIRESTORE_DB)
+
+
 async def set_cached_analysis(image_hash: str, data: dict):
     """Saves analysis data to Firestore."""
     doc_ref = db.collection(CACHE_COLLECTION).document(image_hash)

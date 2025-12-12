@@ -3,16 +3,17 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/router'
 import { motion } from 'framer-motion'
+import { useAuth } from '@/contexts/AuthContext'
 import { Button, Card, CardContent, CardHeader, CardTitle } from '@/components/ui'
 import { useTheme } from '@/contexts/ThemeContext'
 import ThemeToggle from '@/components/ThemeToggle'
 import Link from 'next/link'
 import Image from 'next/image'
-import apiService from '@/services/api'
+import api from '@/services/api'
 import {
     ArrowLeft,
     Edit,
-    Trash2,
+    Trash, // Changed from Trash2
     Heart,
     Share2,
     Eye,
@@ -21,43 +22,47 @@ import {
     DollarSign,
     Ruler,
     Calendar,
-    User
+    User,
+    ShoppingCart // Added ShoppingCart
 } from 'lucide-react'
 
 export default function ProductDetail() {
     const router = useRouter()
     const { productId } = router.query
     const { isDarkMode } = useTheme()
+    const { user, token, isAuthenticated } = useAuth() // Added useAuth
 
     const [product, setProduct] = useState(null)
-    const [loading, setLoading] = useState(true)
+    const [isLoading, setIsLoading] = useState(true) // Renamed from loading
     const [error, setError] = useState(null)
     const [isOwner, setIsOwner] = useState(false)
+    const [isDeleting, setIsDeleting] = useState(false) // Added isDeleting
+    const [isLiked, setIsLiked] = useState(false) // Added isLiked
+    const [likesCount, setLikesCount] = useState(0) // Added likesCount
 
     useEffect(() => {
         if (productId) {
-            loadProduct()
+            fetchProduct() // Renamed from loadProduct
         }
     }, [productId])
 
-    const loadProduct = async () => {
-        setLoading(true)
+    const fetchProduct = async () => { // Renamed from loadProduct
+        setIsLoading(true) // Renamed from setLoading
         setError(null)
 
         try {
-            // TODO: Get auth token from context/state
-            const authToken = null // Replace with actual token
-            const data = await apiService.getProduct(productId, authToken)
-
+            const data = await api.getProduct(productId) // Used api and removed authToken
             setProduct(data)
+            setLikesCount(data.likes_count || 0) // Set likesCount
 
-            // TODO: Check if current user owns this product
-            // setIsOwner(currentUserId === data.user_id)
+            // Check if current user owns this product
+            const isOwner = isAuthenticated && user && user.user_id === data.user_id
+            setIsOwner(isOwner)
         } catch (err) {
-            console.error('Failed to load product:', err)
+            console.error('Failed to fetch product:', err) // Updated log message
             setError('Failed to load product details')
         } finally {
-            setLoading(false)
+            setIsLoading(false) // Renamed from setLoading
         }
     }
 
@@ -67,21 +72,37 @@ export default function ProductDetail() {
         }
 
         try {
-            // TODO: Get auth token
-            const authToken = 'mock-token'
-            await apiService.deleteProduct(productId, authToken)
-            router.push('/dashboard')
+            setIsDeleting(true) // Set isDeleting
+            await api.deleteProduct(productId) // Used api and token
+            router.push('/products') // Changed path from /dashboard to /products
         } catch (err) {
             console.error('Failed to delete product:', err)
             alert('Failed to delete product')
+        } finally {
+            setIsDeleting(false) // Reset isDeleting
         }
     }
 
-    if (loading) {
+    const handleLike = async () => {
+        if (!isAuthenticated) {
+            router.push('/login')
+            return
+        }
+
+        try {
+            const result = await api.toggleProductLike(productId)
+            setIsLiked(result.liked)
+            setLikesCount(result.likes_count)
+        } catch (err) {
+            console.error('Failed to toggle like:', err)
+        }
+    }
+
+    if (isLoading) { // Used isLoading
         return (
             <div className={`min-h-screen p-6 transition-all duration-300 ${isDarkMode
-                    ? 'bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900'
-                    : 'bg-gradient-to-br from-orange-50 via-amber-50 to-yellow-50'
+                ? 'bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900'
+                : 'bg-gradient-to-br from-orange-50 via-amber-50 to-yellow-50'
                 }`}>
                 <div className="max-w-6xl mx-auto">
                     <div className="animate-pulse space-y-6">
@@ -97,8 +118,8 @@ export default function ProductDetail() {
     if (error || !product) {
         return (
             <div className={`min-h-screen p-6 transition-all duration-300 ${isDarkMode
-                    ? 'bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900'
-                    : 'bg-gradient-to-br from-orange-50 via-amber-50 to-yellow-50'
+                ? 'bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900'
+                : 'bg-gradient-to-br from-orange-50 via-amber-50 to-yellow-50'
                 }`}>
                 <div className="max-w-6xl mx-auto text-center">
                     <h1 className={`text-2xl font-bold mb-4 ${isDarkMode ? 'text-gray-100' : 'text-gray-800'}`}>
@@ -114,8 +135,8 @@ export default function ProductDetail() {
 
     return (
         <div className={`min-h-screen p-6 transition-all duration-300 ${isDarkMode
-                ? 'bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900'
-                : 'bg-gradient-to-br from-orange-50 via-amber-50 to-yellow-50'
+            ? 'bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900'
+            : 'bg-gradient-to-br from-orange-50 via-amber-50 to-yellow-50'
             }`}>
             <div className="max-w-6xl mx-auto">
                 {/* Header */}
@@ -123,8 +144,8 @@ export default function ProductDetail() {
                     <Link href="/dashboard">
                         <motion.button
                             className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors duration-300 ${isDarkMode
-                                    ? 'text-orange-400 hover:bg-gray-800'
-                                    : 'text-orange-700 hover:bg-orange-100'
+                                ? 'text-orange-400 hover:bg-gray-800'
+                                : 'text-orange-700 hover:bg-orange-100'
                                 }`}
                             whileHover={{ scale: 1.05 }}
                             whileTap={{ scale: 0.95 }}
@@ -144,17 +165,21 @@ export default function ProductDetail() {
                         className="space-y-4"
                     >
                         <Card className={`overflow-hidden ${isDarkMode
-                                ? 'bg-gray-800/90 backdrop-blur-sm border-gray-700'
-                                : 'bg-white/90 backdrop-blur-sm border-orange-100'
+                            ? 'bg-gray-800/90 backdrop-blur-sm border-gray-700'
+                            : 'bg-white/90 backdrop-blur-sm border-orange-100'
                             }`}>
                             <CardContent className="p-0">
                                 {product.images && product.images.length > 0 ? (
                                     <div className="relative aspect-square">
-                                        <Image
-                                            src={product.images[0].enhanced_uri || product.images[0].gcs_uri}
+                                        {/* Use img tag for local files, handle both local and GCS URIs */}
+                                        <img
+                                            src={
+                                                product.images[0].gcs_uri.startsWith('/uploads')
+                                                    ? `http://localhost:8000${product.images[0].gcs_uri}`
+                                                    : (product.images[0].enhanced_uri || product.images[0].gcs_uri)
+                                            }
                                             alt={product.title}
-                                            fill
-                                            className="object-cover"
+                                            className="w-full h-full object-cover"
                                         />
                                     </div>
                                 ) : (
@@ -171,11 +196,14 @@ export default function ProductDetail() {
                             <div className="grid grid-cols-4 gap-2">
                                 {product.images.slice(1, 5).map((img, idx) => (
                                     <div key={idx} className="relative aspect-square rounded-lg overflow-hidden">
-                                        <Image
-                                            src={img.enhanced_uri || img.gcs_uri}
+                                        <img
+                                            src={
+                                                img.gcs_uri.startsWith('/uploads')
+                                                    ? `http://localhost:8000${img.gcs_uri}`
+                                                    : (img.enhanced_uri || img.gcs_uri)
+                                            }
                                             alt={`${product.title} ${idx + 2}`}
-                                            fill
-                                            className="object-cover"
+                                            className="w-full h-full object-cover"
                                         />
                                     </div>
                                 ))}
@@ -195,10 +223,10 @@ export default function ProductDetail() {
                                 <div className="flex-1">
                                     <div className="flex items-center space-x-2 mb-2">
                                         <span className={`px-3 py-1 rounded-full text-xs font-medium ${product.status === 'public'
-                                                ? 'bg-green-100 text-green-800'
-                                                : product.status === 'draft'
-                                                    ? 'bg-yellow-100 text-yellow-800'
-                                                    : 'bg-gray-100 text-gray-800'
+                                            ? 'bg-green-100 text-green-800'
+                                            : product.status === 'draft'
+                                                ? 'bg-yellow-100 text-yellow-800'
+                                                : 'bg-gray-100 text-gray-800'
                                             }`}>
                                             {product.status}
                                         </span>
@@ -249,9 +277,14 @@ export default function ProductDetail() {
                                         </Button>
                                     </>
                                 )}
-                                <Button variant="outline" size="sm">
-                                    <Heart className="h-4 w-4 mr-2" />
-                                    Like
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={handleLike}
+                                    className={isLiked ? 'text-red-500' : ''}
+                                >
+                                    <Heart className={`h-4 w-4 mr-2 ${isLiked ? 'fill-current' : ''}`} />
+                                    {likesCount}
                                 </Button>
                                 <Button variant="outline" size="sm">
                                     <Share2 className="h-4 w-4 mr-2" />
@@ -262,8 +295,8 @@ export default function ProductDetail() {
 
                         {/* Description */}
                         <Card className={`${isDarkMode
-                                ? 'bg-gray-800/90 backdrop-blur-sm border-gray-700'
-                                : 'bg-white/90 backdrop-blur-sm border-orange-100'
+                            ? 'bg-gray-800/90 backdrop-blur-sm border-gray-700'
+                            : 'bg-white/90 backdrop-blur-sm border-orange-100'
                             }`}>
                             <CardHeader>
                                 <CardTitle className={isDarkMode ? 'text-gray-100' : 'text-gray-800'}>
@@ -280,8 +313,8 @@ export default function ProductDetail() {
                         {/* Story */}
                         {product.story && (
                             <Card className={`${isDarkMode
-                                    ? 'bg-gray-800/90 backdrop-blur-sm border-gray-700'
-                                    : 'bg-white/90 backdrop-blur-sm border-orange-100'
+                                ? 'bg-gray-800/90 backdrop-blur-sm border-gray-700'
+                                : 'bg-white/90 backdrop-blur-sm border-orange-100'
                                 }`}>
                                 <CardHeader>
                                     <CardTitle className={isDarkMode ? 'text-gray-100' : 'text-gray-800'}>
@@ -298,8 +331,8 @@ export default function ProductDetail() {
 
                         {/* Product Details */}
                         <Card className={`${isDarkMode
-                                ? 'bg-gray-800/90 backdrop-blur-sm border-gray-700'
-                                : 'bg-white/90 backdrop-blur-sm border-orange-100'
+                            ? 'bg-gray-800/90 backdrop-blur-sm border-gray-700'
+                            : 'bg-white/90 backdrop-blur-sm border-orange-100'
                             }`}>
                             <CardHeader>
                                 <CardTitle className={isDarkMode ? 'text-gray-100' : 'text-gray-800'}>
@@ -317,8 +350,8 @@ export default function ProductDetail() {
                                                 <span
                                                     key={idx}
                                                     className={`px-3 py-1 rounded-full text-xs ${isDarkMode
-                                                            ? 'bg-gray-700 text-gray-300'
-                                                            : 'bg-gray-100 text-gray-700'
+                                                        ? 'bg-gray-700 text-gray-300'
+                                                        : 'bg-gray-100 text-gray-700'
                                                         }`}
                                                 >
                                                     {material}
@@ -338,8 +371,8 @@ export default function ProductDetail() {
                                                 <span
                                                     key={idx}
                                                     className={`px-3 py-1 rounded-full text-xs ${isDarkMode
-                                                            ? 'bg-gray-700 text-gray-300'
-                                                            : 'bg-gray-100 text-gray-700'
+                                                        ? 'bg-gray-700 text-gray-300'
+                                                        : 'bg-gray-100 text-gray-700'
                                                         }`}
                                                 >
                                                     {color}
@@ -394,8 +427,8 @@ export default function ProductDetail() {
                                                 <span
                                                     key={idx}
                                                     className={`px-2 py-1 rounded text-xs ${isDarkMode
-                                                            ? 'bg-gray-700 text-gray-300'
-                                                            : 'bg-gray-100 text-gray-700'
+                                                        ? 'bg-gray-700 text-gray-300'
+                                                        : 'bg-gray-100 text-gray-700'
                                                         }`}
                                                 >
                                                     #{tag}
@@ -407,8 +440,8 @@ export default function ProductDetail() {
 
                                 {/* Metadata */}
                                 <div className={`pt-3 border-t text-xs space-y-1 ${isDarkMode
-                                        ? 'border-gray-700 text-gray-500'
-                                        : 'border-gray-200 text-gray-500'
+                                    ? 'border-gray-700 text-gray-500'
+                                    : 'border-gray-200 text-gray-500'
                                     }`}>
                                     <div className="flex items-center space-x-2">
                                         <Calendar className="h-3 w-3" />
